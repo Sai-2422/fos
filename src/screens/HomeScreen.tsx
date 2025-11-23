@@ -2,6 +2,7 @@
 
 import React from 'react';
 import {
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,6 +32,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
 
   const styles = React.useMemo(() => createStyles(isDark), [isDark]);
 
+  // ---------- NEW: Attendance popup visibility ----------
+  const [showAttendancePrompt, setShowAttendancePrompt] = React.useState(true);
+
   const openDrawer = () => {
     navigation.getParent()?.openDrawer?.();
   };
@@ -52,70 +56,105 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
     </Pressable>
   );
 
+  // ---------- NEW: when user taps "Mark Attendance" ----------
+  const handleMarkAttendance = () => {
+    setShowAttendancePrompt(false);
+    // Switch to the Attendance drawer stack
+    navigation.getParent()?.navigate('AttendanceDrawer');
+  };
+
   return (
-    <View style={styles.container}>
-      {/* Header with hamburger and app name */}
-      <View style={styles.header}>
-        <Pressable style={styles.menuButton} onPress={openDrawer}>
-          <View style={styles.menuLine} />
-          <View style={styles.menuLine} />
-          <View style={styles.menuLine} />
-        </Pressable>
+    <>
+      {/* Main Home UI */}
+      <View style={styles.container}>
+        {/* Header with hamburger and app name */}
+        <View style={styles.header}>
+          <Pressable style={styles.menuButton} onPress={openDrawer}>
+            <View style={styles.menuLine} />
+            <View style={styles.menuLine} />
+            <View style={styles.menuLine} />
+          </Pressable>
 
-        <View style={styles.headerTextWrapper}>
-          <Text style={styles.appName}>{APP_DISPLAY_NAME}</Text>
-          <Text style={styles.appSubtitle}>
-            {fullName ? `Hi ${fullName}` : COMPANY_NAME}
+          <View style={styles.headerTextWrapper}>
+            <Text style={styles.appName}>{APP_DISPLAY_NAME}</Text>
+            <Text style={styles.appSubtitle}>
+              {fullName ? `Hi ${fullName}` : COMPANY_NAME}
+            </Text>
+          </View>
+        </View>
+
+        {/* Top summary strip */}
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Pending Deposit</Text>
+            <Text style={styles.summaryAmount}>₹0</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Unverified Amount</Text>
+            <Text style={styles.summaryAmount}>₹0</Text>
+          </View>
+        </View>
+
+        {/* Main content */}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* My Cases section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>My Cases</Text>
+            <View style={styles.tileRow}>
+              <Tile title="Priority Bucket" onPress={goPriorityBucket} />
+              <Tile title="My List" subtitle="All Cases" onPress={goMyList} />
+            </View>
+          </View>
+
+          {/* Collection & Deposit section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Collection &amp; Deposit</Text>
+            <View style={styles.tileRow}>
+              <Tile title="Collection" onPress={goCollection} />
+              <Tile title="Deposit" onPress={goDeposit} />
+            </View>
+          </View>
+
+          <Text style={styles.helperText}>
+            This is your FOS home screen. Use the tiles above to open cases,
+            record collections and deposits.
           </Text>
-        </View>
+        </ScrollView>
       </View>
 
-      {/* Top summary strip */}
-      <View style={styles.summaryRow}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Pending Deposit</Text>
-          <Text style={styles.summaryAmount}>₹0</Text>
-        </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Unverified Amount</Text>
-          <Text style={styles.summaryAmount}>₹0</Text>
-        </View>
-      </View>
-
-      {/* Main content */}
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      {/* ---------- NEW: Mark Attendance popup ---------- */}
+      <Modal
+        visible={showAttendancePrompt}
+        animationType="fade"
+        transparent
+        statusBarTranslucent
+        onRequestClose={() => setShowAttendancePrompt(false)}
       >
-        {/* My Cases section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>My Cases</Text>
-          <View style={styles.tileRow}>
-            <Tile title="Priority Bucket" onPress={goPriorityBucket} />
-            <Tile
-              title="My List"
-              subtitle="All Cases"
-              onPress={goMyList}
-            />
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Mark your attendance</Text>
+
+            <View style={styles.modalDivider} />
+
+            <Text style={styles.modalWelcome}>
+              {fullName ? `Welcome ${fullName}!` : 'Welcome!'}
+            </Text>
+            <Text style={styles.modalText}>Please mark your attendance</Text>
+
+            <Pressable
+              style={styles.modalButton}
+              onPress={handleMarkAttendance}
+            >
+              <Text style={styles.modalButtonLabel}>Mark Attendance</Text>
+            </Pressable>
           </View>
         </View>
-
-        {/* Collection & Deposit section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Collection &amp; Deposit</Text>
-          <View style={styles.tileRow}>
-            <Tile title="Collection" onPress={goCollection} />
-            <Tile title="Deposit" onPress={goDeposit} />
-          </View>
-        </View>
-
-        <Text style={styles.helperText}>
-          This is your FOS home screen. Use the tiles above to open cases,
-          record collections and deposits.
-        </Text>
-      </ScrollView>
-    </View>
+      </Modal>
+    </>
   );
 };
 
@@ -217,7 +256,7 @@ const createStyles = (isDark: boolean) =>
       borderRadius: 18,
       paddingHorizontal: 14,
       paddingVertical: 20,
-      minHeight: 120, // 👈 taller cards
+      minHeight: 120,
       borderWidth: isDark ? 1 : 0,
       borderColor: isDark ? '#1f2937' : 'transparent',
       shadowColor: '#000',
@@ -258,6 +297,60 @@ const createStyles = (isDark: boolean) =>
       color: isDark ? '#9ca3af' : '#6b7280',
       textAlign: 'center',
       lineHeight: 18,
+    },
+
+    // ---------- NEW styles for popup ----------
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.45)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalCard: {
+      width: '88%',
+      borderRadius: 24,
+      paddingHorizontal: 22,
+      paddingVertical: 22,
+      backgroundColor: isDark ? '#020617' : '#ffffff',
+      shadowColor: '#000',
+      shadowOpacity: 0.3,
+      shadowOffset: { width: 0, height: 6 },
+      shadowRadius: 16,
+      elevation: 10,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: isDark ? '#e5e7eb' : '#111827',
+    },
+    modalDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: isDark ? '#1f2937' : '#e5e7eb',
+      marginVertical: 12,
+    },
+    modalWelcome: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? '#e5e7eb' : '#111827',
+      marginBottom: 4,
+    },
+    modalText: {
+      fontSize: 14,
+      color: isDark ? '#9ca3af' : '#4b5563',
+      marginBottom: 18,
+    },
+    modalButton: {
+      marginTop: 4,
+      borderRadius: 9999,
+      paddingVertical: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#3b82f6', // blue button like reference screenshot
+    },
+    modalButtonLabel: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: '#ffffff',
     },
   });
 
