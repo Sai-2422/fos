@@ -33,7 +33,11 @@ import PriorityBucketScreen from './src/screens/PriorityBucketScreen';
 import MyListScreen from './src/screens/MyListScreen';
 import CollectionScreen from './src/screens/CollectionScreen';
 import DepositScreen from './src/screens/DepositScreen';
-import { COMPANY_NAME, ERP_LOGOUT_URL } from './src/config/erpConfig';
+import {
+  COMPANY_NAME,
+  APP_DISPLAY_NAME,
+  ERP_LOGOUT_URL,
+} from './src/config/erpConfig';
 
 const AuthStack = createNativeStackNavigator();
 const HomeStack = createNativeStackNavigator();
@@ -70,7 +74,7 @@ function CustomDrawerContent(props: CustomDrawerProps) {
       <View
         style={[
           styles.drawerHeader,
-          { backgroundColor: isDark ? '#111827' : '#fda600' },
+          { backgroundColor: isDark ? '#111827' : '#397E8A' },
         ]}
       >
         {/* White rounded pill behind app icon + title */}
@@ -83,7 +87,7 @@ function CustomDrawerContent(props: CustomDrawerProps) {
           <View
             style={[
               styles.drawerAppIcon,
-              { backgroundColor: isDark ? '#111827' : '#fda600' },
+              { backgroundColor: isDark ? '#111827' : '#397E8A' },
             ]}
           >
             {/* Walking person icon for FOS */}
@@ -100,7 +104,7 @@ function CustomDrawerContent(props: CustomDrawerProps) {
                 { color: isDark ? '#111827' : '#111827' },
               ]}
             >
-              Frappe FOS
+              {APP_DISPLAY_NAME}
             </Text>
             <Text
               style={[
@@ -142,11 +146,10 @@ function HomeStackNavigator(props: { fullName?: string }) {
 
   return (
     <HomeStack.Navigator>
-      <HomeStack.Screen
-        name="Home"
-        options={{ headerShown: false }}
-      >
-        {(screenProps) => <HomeScreen {...screenProps} fullName={fullName} />}
+      <HomeStack.Screen name="Home" options={{ headerShown: false }}>
+        {(screenProps) => (
+          <HomeScreen {...screenProps} fullName={fullName} />
+        )}
       </HomeStack.Screen>
 
       <HomeStack.Screen
@@ -154,21 +157,26 @@ function HomeStackNavigator(props: { fullName?: string }) {
         component={PriorityBucketScreen}
         options={{ title: 'Priority Bucket' }}
       />
+
       <HomeStack.Screen
         name="MyList"
         component={MyListScreen}
         options={{ title: 'My List (All Cases)' }}
       />
-      <HomeStack.Screen
-        name="Collection"
-        component={CollectionScreen}
-        options={{ title: 'Collection' }}
-      />
-      <HomeStack.Screen
-        name="Deposit"
-        component={DepositScreen}
-        options={{ title: 'Deposit' }}
-      />
+
+      {/* ✅ pass fullName to CollectionScreen */}
+      <HomeStack.Screen name="Collection" options={{ title: 'Collection' }}>
+        {(screenProps) => (
+          <CollectionScreen {...screenProps} fullName={fullName} />
+        )}
+      </HomeStack.Screen>
+
+      {/* ✅ pass fullName to DepositScreen */}
+      <HomeStack.Screen name="Deposit" options={{ title: 'Deposit' }}>
+        {(screenProps) => (
+          <DepositScreen {...screenProps} fullName={fullName} />
+        )}
+      </HomeStack.Screen>
     </HomeStack.Navigator>
   );
 }
@@ -289,10 +297,7 @@ function App(): JSX.Element {
           </Drawer.Navigator>
         ) : (
           <AuthStack.Navigator>
-            <AuthStack.Screen
-              name="Login"
-              options={{ headerShown: false }}
-            >
+            <AuthStack.Screen name="Login" options={{ headerShown: false }}>
               {(props) => (
                 <LoginScreen {...props} onLoginSuccess={handleLoginSuccess} />
               )}
@@ -305,7 +310,7 @@ function App(): JSX.Element {
 }
 
 const styles = StyleSheet.create({
-   drawerHeader: {
+  drawerHeader: {
     paddingHorizontal: 16,
     paddingTop: 20,
     paddingBottom: 20,

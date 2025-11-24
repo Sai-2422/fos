@@ -9,7 +9,11 @@ import {
   ERP_UPLOAD_FILE_URL,
 } from '../config/erpConfig';
 
-// Status field options in FOS Attendance
+// ─────────────────────────────────────────────
+// Types & constants
+// ─────────────────────────────────────────────
+
+// Status field options in FOS Attendance (ERP side)
 export type AttendanceStatus = 'Present' | 'Absent' | 'Leave';
 
 // Internal IDs for UI → ERP mapping
@@ -24,7 +28,7 @@ export interface AttendanceOption {
   label: string;
 }
 
-// Options shown in bottom sheet & dropdown
+// Options shown in bottom sheet & dropdown in AttendanceScreen
 export const ATTENDANCE_OPTIONS: AttendanceOption[] = [
   { id: 'FULL_DAY', label: 'Full Day' },
   { id: 'LEAVE', label: 'Leave' },
@@ -32,20 +36,35 @@ export const ATTENDANCE_OPTIONS: AttendanceOption[] = [
   { id: 'HALF_DAY_SECOND', label: 'Half Day (Second Half)' },
 ];
 
-export function getLabelForType(type: AttendanceTypeId): string {
-  return ATTENDANCE_OPTIONS.find(o => o.id === type)?.label ?? 'Full Day';
+// Shape of one FOS Attendance row from ERP
+export interface FOSAttendanceRow {
+  name: string;
+  attendance_date: string;
+  status: AttendanceStatus;
+  attendance_type: string;
 }
 
-// Simple rule: if user selects "Leave" → Status = Leave, else Present
-export function getStatusForType(type: AttendanceTypeId): AttendanceStatus {
-  if (type === 'LEAVE') return 'Leave';
-  return 'Present';
+// Parameters passed from UI when marking attendance
+export interface MarkAttendanceParams {
+  attendanceTypeId: AttendanceTypeId;
+  selfie: Asset;
+}
+
+// Result returned to UI after marking attendance
+export interface MarkAttendanceResult {
+  attendanceName: string;
+  status: AttendanceStatus;
+  attendanceType: string;
+  attendanceDate: string;
+  userEmail: string;
+  fullName: string;
 }
 
 // ─────────────────────────────────────────────
-// Helpers to talk to ERPNext
+// Helper functions
 // ─────────────────────────────────────────────
 
+// Get logged-in ERP user email from session cookie
 async function fetchLoggedInUserEmail(): Promise<string> {
   const res = await fetch(ERP_GET_LOGGED_USER_URL, {
     method: 'GET',
@@ -63,12 +82,13 @@ async function fetchLoggedInUserEmail(): Promise<string> {
   const email = json?.message;
 
   if (typeof email !== 'string' || !email) {
-    throw new Error('Invalid response from get_logged_user');
+    throw new Error('Invalid logged user response from ERP');
   }
 
   return email;
 }
 
+// Get full name of user from User doctype
 async function fetchUserFullName(userEmail: string): Promise<string> {
   const url = `${ERP_BASE_URL}/api/resource/User/${encodeURIComponent(
     userEmail,
@@ -80,8 +100,10 @@ async function fetchUserFullName(userEmail: string): Promise<string> {
   });
 
   if (!res.ok) {
-    // Fallback: just return email if we cannot fetch full name
-    return userEmail;
+    const text = await res.text();
+    throw new Error(
+      `Failed to fetch user profile: ${res.status} ${text || ''}`,
+    );
   }
 
   const json = await res.json();
@@ -103,6 +125,23 @@ function formatDateForErp(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+// Map UI type → ERP Status field
+function getStatusForType(typeId: AttendanceTypeId): AttendanceStatus {
+  switch (typeId) {
+    case 'LEAVE':
+      return 'Leave';
+    default:
+      // Full day or half day we still treat as Present for now
+      return 'Present';
+  }
+}
+
+// Map UI type → ERP Attendance Type label
+function getLabelForType(typeId: AttendanceTypeId): string {
+  const found = ATTENDANCE_OPTIONS.find(o => o.id === typeId);
+  return found?.label ?? 'Full Day';
+}
+
 // Build single doc URL like /api/resource/FOS%20Attendance/FOS%20A-0001
 function attendanceDocUrl(name: string): string {
   return `${ERP_FOS_ATTENDANCE_URL}/${encodeURIComponent(name)}`;
@@ -116,33 +155,94 @@ async function deleteAttendanceDoc(name: string): Promise<void> {
       headers: { Accept: 'application/json' },
     });
   } catch (err) {
-    console.warn('Rollback: failed to delete attendance doc:', err);
+    console.warn('Failed to rollback attendance doc', err);
   }
 }
 
 // ─────────────────────────────────────────────
-// Public API for AttendanceScreen
+// File upload helper (Selfie)
 // ─────────────────────────────────────────────
+//
+// IMPORTANT:
+// - We send `doctype` + `docname` in the SAME upload_file request.
+// - ERP then creates & attaches the File correctly.
+// - No extra attach_file call.
+//
+async function uploadSelfieFile(
+  selfie: Asset,
+  attendanceName: string,
+): Promise<{
+  file_url: string;
+  file_name: string;
+}> {
+  if (!selfie.uri) {
+    throw new Error('Invalid selfie asset');
+  }
 
-export interface MarkAttendanceParams {
-  attendanceTypeId: AttendanceTypeId;
-  selfie: Asset;
+  if (!attendanceName) {
+    throw new Error('Cannot upload selfie without attendance document name');
+  }
+
+  const formData = new FormData();
+
+  formData.append('file', {
+    // @ts-ignore React Native FormData file object
+    uri: selfie.uri,
+    name: selfie.fileName || 'attendance_selfie.jpg',
+    type: selfie.type || 'image/jpeg',
+  });
+
+  // Link File directly to the FOS Attendance doc
+  formData.append('is_private', '0');
+  formData.append('doctype', ERP_FOS_ATTENDANCE_DOCTYPE);
+  formData.append('docname', attendanceName);
+
+  const res = await fetch(ERP_UPLOAD_FILE_URL, {
+    method: 'POST',
+    body: formData,
+    headers: {
+      // NOTE: don't set Content-Type; fetch sets multipart boundary
+      Accept: 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `Failed to upload selfie: ${res.status} ${text || ''}`,
+    );
+  }
+
+  const json = await res.json();
+  const data: any = json?.message || json?.data || {};
+
+  const file_url = data?.file_url as string | undefined;
+  const file_name =
+    (data?.file_name as string | undefined) ||
+    (data?.name as string | undefined);
+
+  if (!file_url) {
+    throw new Error('Invalid upload_file response (missing file_url)');
+  }
+
+  return {
+    file_url,
+    file_name: file_name || '',
+  };
 }
 
-export interface MarkAttendanceResult {
-  attendanceName: string;
-  status: AttendanceStatus;
-  attendanceType: string;
-  userEmail: string;
-  fullName: string;
-}
-
+// ─────────────────────────────────────────────
+// Public API
+// ─────────────────────────────────────────────
+//
+// Flow:
 // 1) Uses current ERP session (cookie from /api/method/login)
-// 2) Gets logged in user email + full name
-// 3) POST /api/resource/FOS Attendance
-// 4) Uploads selfie & attaches
-// 5) Updates `selfie` field with file_url
+// 2) Gets logged-in user email + full name
+// 3) POST /api/resource/FOS Attendance (create doc)
+// 4) Uploads selfie with doctype+docname so it’s attached to the doc
+// 5) Updates `selfie` field on FOS Attendance with file_url (via set_value)
 // 6) If any step after create fails → delete created doc & throw
+//
 export async function markAttendanceOnErp(
   params: MarkAttendanceParams,
 ): Promise<MarkAttendanceResult> {
@@ -168,7 +268,7 @@ export async function markAttendanceOnErp(
       fos_agent: fullName, // FOS Agent - logged in user's name
       user: userEmail, // User - logged in user's email
       attendance_date: attendanceDate,
-      status, // Present / Leave (Absent can be handled by other flows)
+      status, // Present / Leave
       attendance_type: attendanceTypeLabel,
     };
 
@@ -178,7 +278,7 @@ export async function markAttendanceOnErp(
         Accept: 'application/json',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(docPayload),
+      body: JSON.stringify({ data: docPayload }),
     });
 
     if (!createRes.ok) {
@@ -189,60 +289,35 @@ export async function markAttendanceOnErp(
     }
 
     const createdJson = await createRes.json();
-    attendanceName =
-      createdJson?.data?.name || createdJson?.data?.id || '';
+    const createdData = createdJson?.data;
+    attendanceName = (createdData?.name as string) || null;
 
     if (!attendanceName) {
-      throw new Error('Attendance created but no document name returned');
+      throw new Error('Invalid attendance create response (no name)');
     }
 
-    // Step 3: Upload selfie and attach to created doc
-    const formData = new FormData();
-    formData.append('file', {
-      uri: selfie.uri,
-      name: selfie.fileName || `selfie-${attendanceName}.jpg`,
-      type: selfie.type || 'image/jpeg',
-    } as any);
-    formData.append('doctype', ERP_FOS_ATTENDANCE_DOCTYPE);
-    formData.append('docname', attendanceName);
-    formData.append('fieldname', 'selfie'); // Attach Image field name
-    formData.append('is_private', '0');
+    // Step 3: Upload selfie (also attaches to this Attendance doc)
+    const uploadInfo = await uploadSelfieFile(selfie, attendanceName);
 
-    const uploadRes = await fetch(ERP_UPLOAD_FILE_URL, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        // IMPORTANT: Do NOT set 'Content-Type' manually for FormData in React Native
+    // Step 4: Update selfie field with frappe.client.set_value (FIXED)
+    const updatePayload = {
+      doctype: ERP_FOS_ATTENDANCE_DOCTYPE,
+      name: attendanceName,
+      fieldname: 'selfie',
+      value: uploadInfo.file_url,
+    };
+
+    const updateRes = await fetch(
+      `${ERP_BASE_URL}/api/method/frappe.client.set_value`,
+      {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatePayload),
       },
-      body: formData,
-    });
-
-    if (!uploadRes.ok) {
-      const text = await uploadRes.text();
-      throw new Error(
-        `Failed to upload selfie: ${uploadRes.status} ${text || ''}`,
-      );
-    }
-
-    const uploadJson = await uploadRes.json();
-    const fileUrl: string =
-      uploadJson?.message?.file_url ||
-      uploadJson?.file_url ||
-      uploadJson?.message?.file_url;
-
-    if (!fileUrl) {
-      throw new Error('Selfie upload did not return file_url');
-    }
-
-    // Step 4: Ensure Selfie field is set with file_url
-    const updateRes = await fetch(attendanceDocUrl(attendanceName), {
-      method: 'PUT',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ selfie: fileUrl }),
-    });
+    );
 
     if (!updateRes.ok) {
       const text = await updateRes.text();
@@ -256,6 +331,7 @@ export async function markAttendanceOnErp(
       attendanceName,
       status,
       attendanceType: attendanceTypeLabel,
+      attendanceDate,
       userEmail,
       fullName,
     };
@@ -266,4 +342,101 @@ export async function markAttendanceOnErp(
     }
     throw error;
   }
+}
+
+// Fetch today's attendance for current ERP user (if any)
+export async function fetchTodayAttendanceForLoggedInUser(): Promise<FOSAttendanceRow | null> {
+  const userEmail = await fetchLoggedInUserEmail();
+  const today = formatDateForErp(new Date());
+
+  const params = new URLSearchParams();
+  params.append(
+    'filters',
+    JSON.stringify([
+      ['user', '=', userEmail],
+      ['attendance_date', '=', today],
+    ]),
+  );
+  params.append(
+    'fields',
+    JSON.stringify(['name', 'attendance_date', 'status', 'attendance_type']),
+  );
+  params.append('limit_page_length', '1');
+
+  const url = `${ERP_FOS_ATTENDANCE_URL}?${params.toString()}`;
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `Failed to fetch today's attendance: ${res.status} ${text || ''}`,
+    );
+  }
+
+  const json = await res.json();
+  const rows = json?.data as any[];
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return null;
+  }
+
+  const row = rows[0];
+
+  return {
+    name: row.name as string,
+    attendance_date: row.attendance_date as string,
+    status: row.status as AttendanceStatus,
+    attendance_type: row.attendance_type as string,
+  };
+}
+
+// Fetch previous N attendance records for current user (history list)
+export async function fetchAttendanceHistoryForLoggedInUser(
+  limit = 50,
+): Promise<FOSAttendanceRow[]> {
+  const userEmail = await fetchLoggedInUserEmail();
+
+  const params = new URLSearchParams();
+  params.append(
+    'filters',
+    JSON.stringify([['user', '=', userEmail]]),
+  );
+  params.append(
+    'fields',
+    JSON.stringify(['name', 'attendance_date', 'status', 'attendance_type']),
+  );
+  params.append('limit_page_length', String(limit));
+  params.append('order_by', 'attendance_date desc');
+
+  const url = `${ERP_FOS_ATTENDANCE_URL}?${params.toString()}`;
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `Failed to fetch attendance history: ${res.status} ${text || ''}`,
+    );
+  }
+
+  const json = await res.json();
+  const rows = json?.data as any[];
+
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows.map(row => ({
+    name: row.name as string,
+    attendance_date: row.attendance_date as string,
+    status: row.status as AttendanceStatus,
+    attendance_type: row.attendance_type as string,
+  }));
 }

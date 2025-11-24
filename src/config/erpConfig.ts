@@ -32,9 +32,27 @@ export const ERP_FOS_ATTENDANCE_URL = `${ERP_RESOURCE_BASE}/${encodeURIComponent
   ERP_FOS_ATTENDANCE_DOCTYPE,
 )}`;
 
-// File upload endpoint (for Selfie)
+// File upload endpoint (for Selfie / KYC images)
 export const ERP_UPLOAD_FILE_PATH = '/api/method/upload_file';
 export const ERP_UPLOAD_FILE_URL = `${ERP_BASE_URL}${ERP_UPLOAD_FILE_PATH}`;
+
+// ─────────────────────────────────────────────
+// FOS Case (used for My List screen)
+// ─────────────────────────────────────────────
+
+export const ERP_FOS_CASE_DOCTYPE = 'FOS Case';
+export const ERP_FOS_CASE_PATH = `/api/resource/${ERP_FOS_CASE_DOCTYPE}`;
+export const ERP_FOS_CASE_URL = `${ERP_BASE_URL}${ERP_FOS_CASE_PATH}`;
+
+// FOS Visit KYC (child table of FOS Case)
+export const ERP_FOS_VISIT_KYC_DOCTYPE = 'FOS Visit KYC';
+export const ERP_FOS_VISIT_KYC_URL = `${ERP_RESOURCE_BASE}/${encodeURIComponent(
+  ERP_FOS_VISIT_KYC_DOCTYPE,
+)}`;
+
+// Generic set_value method (we'll use this to update fields on FOS Case)
+export const ERP_SET_VALUE_PATH = '/api/method/frappe.client.set_value';
+export const ERP_SET_VALUE_URL = `${ERP_BASE_URL}${ERP_SET_VALUE_PATH}`;
 
 // ─────────────────────────────────────────────
 // Display values
@@ -44,4 +62,4 @@ export const ERP_UPLOAD_FILE_URL = `${ERP_BASE_URL}${ERP_UPLOAD_FILE_PATH}`;
 export const COMPANY_NAME = 'ePradisys Technologies'; // change if needed
 
 // Mobile app display name (used on home screen header)
-export const APP_DISPLAY_NAME = 'FOS Collection';
+export const APP_DISPLAY_NAME = 'ePravaah';
