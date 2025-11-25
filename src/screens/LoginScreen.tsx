@@ -9,22 +9,35 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  useColorScheme,
   View,
   Pressable,
+  StatusBar,
+  Dimensions,
 } from 'react-native';
 import { COMPANY_NAME, APP_DISPLAY_NAME } from '../config/erpConfig';
 import { loginWithPassword, LoginResult } from '../services/erpAuth';
+
+// --- Color Constants based on your request ---
+const COLORS = {
+  primary: '#397e8a',    // Teal/Cyan
+  background: '#152e47', // Dark Navy
+  white: '#ffffff',
+  surface: '#ffffff',
+  inputBg: '#f0f4f8',
+  textMain: '#152e47',
+  textSub: '#64748b',
+  errorBg: '#fee2e2',
+  errorText: '#ef4444',
+  successBg: '#dcfce7',
+  successText: '#22c55e',
+};
 
 type LoginScreenProps = {
   onLoginSuccess: (fullName?: string) => void;
 };
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-
-  const styles = React.useMemo(() => createStyles(isDark), [isDark]);
+  const styles = createStyles();
 
   const [username, setUsername] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -50,7 +63,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       setStatus(result);
 
       if (result.ok) {
-        // Navigate to Home
         onLoginSuccess(result.fullName);
       }
     } finally {
@@ -62,211 +74,258 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     status && status.ok ? styles.statusSuccess : styles.statusError;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
+    <View style={styles.mainContainer}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      
+      <KeyboardAvoidingView
         style={styles.flex}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.screen}>
-          {/* App heading */}
-          <Text style={styles.appName}>{APP_DISPLAY_NAME}</Text>
-          <Text style={styles.appSubtitle}>
-            Secure access to {COMPANY_NAME}.
-          </Text>
-
-          {/* Login card */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Sign in</Text>
-            <Text style={styles.cardSubtitle}>
-              Use your ERPNext username and password to continue.
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header Section (Dark Navy Background) */}
+          <View style={styles.headerSection}>
+            <Text style={styles.appName}>{APP_DISPLAY_NAME}</Text>
+            <Text style={styles.appSubtitle}>
+              Welcome to {COMPANY_NAME}
             </Text>
-
-            {/* Username */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Username</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="you@example.com"
-                placeholderTextColor={styles.placeholderColor.color}
-                autoCapitalize="none"
-                autoCorrect={false}
-                value={username}
-                onChangeText={setUsername}
-              />
-            </View>
-
-            {/* Password */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="••••••••"
-                placeholderTextColor={styles.placeholderColor.color}
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-              />
-            </View>
-
-            {/* Login button */}
-            <Pressable
-              onPress={handleLoginPress}
-              disabled={isSubmitting}
-              style={({ pressed }) => [
-                styles.button,
-                pressed && styles.buttonPressed,
-                isSubmitting && styles.buttonDisabled,
-              ]}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={styles.buttonText}>Login</Text>
-              )}
-            </Pressable>
-
-            {/* Status box */}
-            {status && (
-              <View style={[styles.statusBox, statusColorStyle]}>
-                <Text style={styles.statusTitle}>
-                  {status.ok ? 'Login Success' : 'Login Failed'}
-                </Text>
-                {status.statusCode != null && (
-                  <Text style={styles.statusLine}>
-                    HTTP Status: {status.statusCode}
-                  </Text>
-                )}
-                <Text style={styles.statusLine}>{status.message}</Text>
-              </View>
-            )}
           </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+          {/* Bottom Section (Card) */}
+          <View style={styles.bottomSection}>
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>Sign In</Text>
+                <View style={styles.titleUnderline} />
+              </View>
+              
+              <Text style={styles.cardSubtitle}>
+                Please enter your credentials to proceed.
+              </Text>
+
+              {/* Username */}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Username or Email</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="user@domain.com"
+                  placeholderTextColor="#94a3b8"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={username}
+                  onChangeText={setUsername}
+                  cursorColor={COLORS.primary}
+                />
+              </View>
+
+              {/* Password */}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Password</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="••••••••"
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry
+                  value={password}
+                  onChangeText={setPassword}
+                  cursorColor={COLORS.primary}
+                />
+              </View>
+
+              {/* Login button */}
+              <Pressable
+                onPress={handleLoginPress}
+                disabled={isSubmitting}
+                style={({ pressed }) => [
+                  styles.button,
+                  pressed && styles.buttonPressed,
+                  isSubmitting && styles.buttonDisabled,
+                ]}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.buttonText}>Login</Text>
+                )}
+              </Pressable>
+
+              {/* Status box */}
+              {status && (
+                <View style={[styles.statusBox, statusColorStyle]}>
+                  <Text style={[
+                    styles.statusTitle, 
+                    status.ok ? { color: COLORS.textMain } : { color: '#7f1d1d' }
+                  ]}>
+                    {status.ok ? 'Login Success' : 'Access Denied'}
+                  </Text>
+                  <Text style={[
+                    styles.statusLine, 
+                    status.ok ? { color: COLORS.textSub } : { color: '#991b1b' }
+                  ]}>
+                    {status.message}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <Text style={styles.footerText}>Protected by ERPNext Security</Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
 
-const createStyles = (isDark: boolean) =>
+const createStyles = () =>
   StyleSheet.create({
+    mainContainer: {
+      flex: 1,
+      backgroundColor: COLORS.background, // #152e47
+    },
     flex: {
       flex: 1,
     },
     scrollContent: {
       flexGrow: 1,
+      justifyContent: 'space-between',
     },
-    screen: {
-      flex: 1,
-      paddingHorizontal: 24,
-      paddingVertical: 32,
-      backgroundColor: isDark ? '#020617' : '#f3f4f6',
-      justifyContent: 'center',
+    headerSection: {
+      paddingTop: Platform.OS === 'android' ? 60 : 80,
+      paddingBottom: 50,
+      paddingHorizontal: 30,
+      alignItems: 'center',
     },
     appName: {
-      fontSize: 24,
-      fontWeight: '700',
-      color: isDark ? '#f9fafb' : '#0f172a',
+      fontSize: 32,
+      fontWeight: '800',
+      color: COLORS.white,
       textAlign: 'center',
-      marginBottom: 4,
+      marginBottom: 8,
+      letterSpacing: 1,
     },
     appSubtitle: {
-      fontSize: 13,
-      color: isDark ? '#9ca3af' : '#6b7280',
+      fontSize: 16,
+      color: '#94a3b8', // Lighter blue-grey for contrast on navy
       textAlign: 'center',
-      marginBottom: 24,
+      fontWeight: '500',
+    },
+    bottomSection: {
+      flex: 1,
+      backgroundColor: '#f8fafc',
+      borderTopLeftRadius: 30,
+      borderTopRightRadius: 30,
+      paddingHorizontal: 24,
+      paddingTop: 32,
+      paddingBottom: 40,
+      alignItems: 'center',
     },
     card: {
-      backgroundColor: isDark ? '#020617' : '#ffffff',
-      borderRadius: 20,
-      paddingHorizontal: 20,
-      paddingVertical: 24,
-      shadowColor: '#000',
-      shadowOpacity: isDark ? 0.4 : 0.12,
-      shadowOffset: { width: 0, height: 10 },
-      shadowRadius: 20,
-      elevation: 6,
-      borderWidth: isDark ? 1 : 0,
-      borderColor: isDark ? '#1f2937' : 'transparent',
+      width: '100%',
+      maxWidth: 400,
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
     },
     cardTitle: {
-      fontSize: 20,
+      fontSize: 24,
       fontWeight: '700',
-      color: isDark ? '#e5e7eb' : '#0f172a',
-      marginBottom: 4,
+      color: COLORS.textMain,
+      marginRight: 10,
+    },
+    titleUnderline: {
+      height: 4,
+      width: 24,
+      backgroundColor: COLORS.primary, // #397e8a
+      borderRadius: 2,
+      marginTop: 4,
     },
     cardSubtitle: {
-      fontSize: 13,
-      color: isDark ? '#9ca3af' : '#6b7280',
-      marginBottom: 16,
+      fontSize: 14,
+      color: COLORS.textSub,
+      marginBottom: 32,
+      marginTop: 4,
     },
     fieldGroup: {
-      marginBottom: 14,
+      marginBottom: 20,
     },
     label: {
       fontSize: 13,
-      fontWeight: '500',
-      color: isDark ? '#d1d5db' : '#4b5563',
-      marginBottom: 4,
+      fontWeight: '600',
+      color: COLORS.textMain,
+      marginBottom: 8,
+      marginLeft: 4,
     },
     input: {
-      height: 44,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: isDark ? '#374151' : '#e5e7eb',
-      paddingHorizontal: 12,
-      fontSize: 14,
-      color: isDark ? '#f9fafb' : '#111827',
-      backgroundColor: isDark ? '#020617' : '#f9fafb',
-    },
-    placeholderColor: {
-      color: isDark ? '#6b7280' : '#9ca3af',
+      height: 56,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      borderColor: '#e2e8f0',
+      paddingHorizontal: 16,
+      fontSize: 16,
+      color: COLORS.textMain,
+      backgroundColor: COLORS.white,
     },
     button: {
-      marginTop: 8,
-      height: 48,
-      borderRadius: 999,
-      backgroundColor: '#2563eb',
+      marginTop: 16,
+      height: 56,
+      borderRadius: 16,
+      backgroundColor: COLORS.primary, // #397e8a
       alignItems: 'center',
       justifyContent: 'center',
+      shadowColor: COLORS.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 10,
+      elevation: 8,
     },
     buttonPressed: {
+      transform: [{ scale: 0.98 }],
       opacity: 0.9,
     },
     buttonDisabled: {
-      opacity: 0.6,
+      opacity: 0.7,
     },
     buttonText: {
-      color: '#ffffff',
-      fontSize: 16,
-      fontWeight: '600',
+      color: COLORS.white,
+      fontSize: 18,
+      fontWeight: 'bold',
+      letterSpacing: 0.5,
+    },
+    footerText: {
+      marginTop: 'auto',
+      paddingTop: 40,
+      fontSize: 12,
+      color: '#cbd5e1',
+      textAlign: 'center',
     },
     statusBox: {
-      marginTop: 16,
-      borderRadius: 10,
-      padding: 10,
+      marginTop: 24,
+      borderRadius: 12,
+      padding: 16,
     },
     statusSuccess: {
-      backgroundColor: isDark ? '#064e3b' : '#ecfdf5',
-      borderColor: '#22c55e',
-      borderWidth: 1,
+      backgroundColor: COLORS.successBg,
+      borderLeftWidth: 4,
+      borderLeftColor: COLORS.successText,
     },
     statusError: {
-      backgroundColor: isDark ? '#7f1d1d' : '#fef2f2',
-      borderColor: '#ef4444',
-      borderWidth: 1,
+      backgroundColor: COLORS.errorBg,
+      borderLeftWidth: 4,
+      borderLeftColor: COLORS.errorText,
     },
     statusTitle: {
-      fontSize: 14,
-      fontWeight: '600',
-      marginBottom: 2,
-      color: isDark ? '#e5e7eb' : '#111827',
+      fontSize: 15,
+      fontWeight: '700',
+      marginBottom: 4,
     },
     statusLine: {
-      fontSize: 12,
-      color: isDark ? '#e5e7eb' : '#374151',
+      fontSize: 13,
     },
   });
 
