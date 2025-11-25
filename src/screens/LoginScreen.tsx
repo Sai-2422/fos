@@ -13,7 +13,7 @@ import {
   View,
   Pressable,
 } from 'react-native';
-import { COMPANY_NAME ,APP_DISPLAY_NAME} from '../config/erpConfig';
+import { COMPANY_NAME, APP_DISPLAY_NAME } from '../config/erpConfig';
 import { loginWithPassword, LoginResult } from '../services/erpAuth';
 
 type LoginScreenProps = {
@@ -73,9 +73,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       >
         <View style={styles.screen}>
           {/* App heading */}
-          <Text style={styles.appName}>{APP_DISPLAY_NAME} Mobile App</Text>
+          <Text style={styles.appName}>{APP_DISPLAY_NAME}</Text>
           <Text style={styles.appSubtitle}>
-            Secure access to {COMPANY_NAME} ERP.
+            Secure access to {COMPANY_NAME}.
           </Text>
 
           {/* Login card */}

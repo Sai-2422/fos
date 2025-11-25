@@ -55,6 +55,13 @@ export const ERP_SET_VALUE_PATH = '/api/method/frappe.client.set_value';
 export const ERP_SET_VALUE_URL = `${ERP_BASE_URL}${ERP_SET_VALUE_PATH}`;
 
 // ─────────────────────────────────────────────
+// FOS Collection & Deposite
+// ─────────────────────────────────────────────
+
+export const ERP_FOS_COLLECTION_DOCTYPE = 'FOS Collection';
+export const ERP_FOS_COLLECTION_URL = `${ERP_BASE_URL}/api/resource/FOS Collection`;
+
+// ─────────────────────────────────────────────
 // Display values
 // ─────────────────────────────────────────────
 

@@ -12,8 +12,8 @@ const PriorityBucketScreen: React.FC = () => {
     <View style={styles.container}>
       <Text style={styles.title}>Priority Bucket</Text>
       <Text style={styles.subtitle}>
-        Dummy page. High priority FOS cases assigned to the agent will be
-        listed here.
+        Dummy page. High priority FOS cases assigned to the agent will be listed
+        here.
       </Text>
     </View>
   );

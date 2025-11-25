@@ -39,7 +39,7 @@ import {
   launchImageLibrary,
 } from 'react-native-image-picker';
 
-const BRAND_BLUE = '#3b82f6';
+const BRAND_BLUE = '#397E8A';
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -106,15 +106,20 @@ const MyListScreen: React.FC = () => {
   const [editStatus, setEditStatus] = React.useState<string>('');
   const [editOutcome, setEditOutcome] = React.useState<string>('');
   const [editVisitDate, setEditVisitDate] = React.useState<string>('');
+  const [visitDateObj, setVisitDateObj] = React.useState<Date | null>(null);
+  const [showVisitDatePicker, setShowVisitDatePicker] =
+    React.useState<boolean>(false);
   const [editRescheduleDate, setEditRescheduleDate] =
     React.useState<string>('');
-  const [rescheduleDateObj, setRescheduleDateObj] =
-    React.useState<Date | null>(null);
+  const [rescheduleDateObj, setRescheduleDateObj] = React.useState<Date | null>(
+    null,
+  );
   const [showReschedulePicker, setShowReschedulePicker] =
     React.useState<boolean>(false);
 
-  const [visitSelfieAsset, setVisitSelfieAsset] =
-    React.useState<Asset | null>(null);
+  const [visitSelfieAsset, setVisitSelfieAsset] = React.useState<Asset | null>(
+    null,
+  );
   const [kycDocType, setKycDocType] = React.useState<string>('');
   const [kycDocNo, setKycDocNo] = React.useState<string>('');
   const [kycFrontAsset, setKycFrontAsset] = React.useState<Asset | null>(null);
@@ -134,7 +139,25 @@ const MyListScreen: React.FC = () => {
 
     try {
       const data = await fetchCasesForAgent(agentName);
-      setCases(data);
+
+      // ── Sort by priority: High → Low → (no / other priority) ──
+      const getPriorityRank = (p?: string | null): number => {
+        if (!p) return 2;
+        const lower = p.toLowerCase();
+        if (lower === 'high') return 0;
+        if (lower === 'low') return 1;
+        return 2;
+      };
+
+      const sorted = [...data].sort((a, b) => {
+        const ra = getPriorityRank(a.priority);
+        const rb = getPriorityRank(b.priority);
+        if (ra !== rb) return ra - rb;
+        // keep relative order for same rank
+        return 0;
+      });
+
+      setCases(sorted);
     } catch (err: any) {
       console.error('Failed to load cases', err);
       setError(err?.message || 'Failed to load cases.');
@@ -160,10 +183,32 @@ const MyListScreen: React.FC = () => {
     setSelectedCase(item);
     setEditStatus(item.status || 'Open');
     setEditOutcome(item.outcomeType || '');
-    setEditVisitDate(item.visitDate || '');
+
+    // Visit date: default to today's date if not set
+    const visitStr = item.visitDate || '';
+    if (visitStr) {
+      const parsedVisit = parseYYYYMMDD(visitStr);
+      if (parsedVisit) {
+        setVisitDateObj(parsedVisit);
+        setEditVisitDate(visitStr);
+      } else {
+        const today = new Date();
+        setVisitDateObj(today);
+        setEditVisitDate(formatYYYYMMDD(today));
+      }
+    } else {
+      const today = new Date();
+      setVisitDateObj(today);
+      setEditVisitDate(formatYYYYMMDD(today));
+    }
+
     const res = item.rescheduleDate || '';
     setEditRescheduleDate(res);
     setRescheduleDateObj(parseYYYYMMDD(res));
+
+    setShowVisitDatePicker(false);
+    setShowReschedulePicker(false);
+
     setVisitSelfieAsset(null);
     setKycDocType('');
     setKycDocNo('');
@@ -174,6 +219,7 @@ const MyListScreen: React.FC = () => {
   const closeModal = () => {
     if (savingVisit) return;
     setSelectedCase(null);
+    setShowVisitDatePicker(false);
     setShowReschedulePicker(false);
   };
 
@@ -232,6 +278,17 @@ const MyListScreen: React.FC = () => {
 
   const pickKycBack = () => {
     pickImageFromLibrary(asset => setKycBackAsset(asset));
+  };
+
+  const handleVisitDateChange = (event: DateTimePickerEvent, date?: Date) => {
+    if (Platform.OS !== 'ios') {
+      setShowVisitDatePicker(false);
+    }
+
+    if (event.type === 'set' && date) {
+      setVisitDateObj(date);
+      setEditVisitDate(formatYYYYMMDD(date));
+    }
   };
 
   const handleRescheduleDateChange = (
@@ -299,9 +356,7 @@ const MyListScreen: React.FC = () => {
 
   const renderItem = ({ item }: { item: AgentCase }) => {
     const priorityLower =
-      typeof item.priority === 'string'
-        ? item.priority.toLowerCase()
-        : '';
+      typeof item.priority === 'string' ? item.priority.toLowerCase() : '';
 
     return (
       <TouchableOpacity
@@ -370,14 +425,14 @@ const MyListScreen: React.FC = () => {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>My List</Text>
-        <Text style={styles.subtitle}>
+        {/* <Text style={styles.subtitle}>
           All FOS cases assigned to you across all regions.
         </Text>
         {agentName && (
           <Text style={styles.agentLine}>
             Agent: <Text style={styles.agentName}>{agentName}</Text>
           </Text>
-        )}
+        )} */}
       </View>
 
       {loading && !refreshing ? (
@@ -419,6 +474,30 @@ const MyListScreen: React.FC = () => {
               <ScrollView contentContainerStyle={styles.modalScroll}>
                 <Text style={styles.modalTitle}>{selectedCase.customer}</Text>
                 <Text style={styles.modalSubtitle}>{selectedCase.caseId}</Text>
+
+                <Text style={styles.modalSectionLabel}>
+                  Visit Date (YYYY-MM-DD)
+                </Text>
+                <TouchableOpacity
+                  style={styles.input}
+                  onPress={() => setShowVisitDatePicker(true)}
+                >
+                  <Text
+                    style={
+                      editVisitDate ? styles.inputText : styles.inputPlaceholder
+                    }
+                  >
+                    {editVisitDate || 'Tap to pick date'}
+                  </Text>
+                </TouchableOpacity>
+                {showVisitDatePicker && (
+                  <DateTimePicker
+                    value={visitDateObj || new Date()}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={handleVisitDateChange}
+                  />
+                )}
 
                 <Text style={styles.modalSectionLabel}>Status</Text>
                 <View style={styles.chipRow}>
@@ -466,17 +545,6 @@ const MyListScreen: React.FC = () => {
                   ))}
                 </View>
 
-                <Text style={styles.modalSectionLabel}>
-                  Visit Date (YYYY-MM-DD)
-                </Text>
-                <TextInput
-                  style={styles.input}
-                  value={editVisitDate}
-                  onChangeText={setEditVisitDate}
-                  placeholder="2025-11-24"
-                  placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
-                />
-
                 {editOutcome === 'Reschedule' && (
                   <>
                     <Text style={styles.modalSectionLabel}>
@@ -500,9 +568,7 @@ const MyListScreen: React.FC = () => {
                       <DateTimePicker
                         value={rescheduleDateObj || new Date()}
                         mode="date"
-                        display={
-                          Platform.OS === 'ios' ? 'spinner' : 'default'
-                        }
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                         onChange={handleRescheduleDateChange}
                       />
                     )}
@@ -559,9 +625,7 @@ const MyListScreen: React.FC = () => {
                       </Text>
                     </TouchableOpacity>
 
-                    <Text style={styles.modalSectionLabel}>
-                      KYC Back Image
-                    </Text>
+                    <Text style={styles.modalSectionLabel}>KYC Back Image</Text>
                     <TouchableOpacity
                       style={styles.secondaryButton}
                       onPress={pickKycBack}

@@ -15,11 +15,7 @@ import {
   View,
 } from 'react-native';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
-import {
-  Asset,
-  CameraOptions,
-  launchCamera,
-} from 'react-native-image-picker';
+import { Asset, CameraOptions, launchCamera } from 'react-native-image-picker';
 import {
   ATTENDANCE_OPTIONS,
   AttendanceTypeId,
@@ -136,8 +132,9 @@ const AttendanceScreen: React.FC = () => {
     React.useState<MarkAttendanceResult | null>(null);
 
   // Today + history state
-  const [attendanceMarkedToday, setAttendanceMarkedToday] =
-    React.useState<boolean | null>(null); // null = checking
+  const [attendanceMarkedToday, setAttendanceMarkedToday] = React.useState<
+    boolean | null
+  >(null); // null = checking
   const [todayAttendance, setTodayAttendance] =
     React.useState<FOSAttendanceRow | null>(null);
   const [history, setHistory] = React.useState<FOSAttendanceRow[]>([]);
@@ -495,10 +492,7 @@ const AttendanceScreen: React.FC = () => {
                         ]}
                       />
                       <Text
-                        style={[
-                          styles.selectValue,
-                          { color: colors.text },
-                        ]}
+                        style={[styles.selectValue, { color: colors.text }]}
                       >
                         {selectedTypeLabel}
                       </Text>
@@ -616,12 +610,7 @@ const AttendanceScreen: React.FC = () => {
                         { backgroundColor: colors.text },
                       ]}
                     />
-                    <Text
-                      style={[
-                        styles.optionLabel,
-                        { color: colors.text },
-                      ]}
-                    >
+                    <Text style={[styles.optionLabel, { color: colors.text }]}>
                       {option.label}
                     </Text>
                   </View>
@@ -657,10 +646,7 @@ const AttendanceScreen: React.FC = () => {
                 {submitResult.status}
               </Text>
             )}
-            <Pressable
-              style={styles.successButton}
-              onPress={handleSuccessOk}
-            >
+            <Pressable style={styles.successButton} onPress={handleSuccessOk}>
               <Text style={styles.successButtonLabel}>OK</Text>
             </Pressable>
           </View>

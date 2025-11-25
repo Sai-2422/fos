@@ -15,8 +15,14 @@ import {
   ERP_FOS_ATTENDANCE_URL,
   ERP_GET_LOGGED_USER_URL,
 } from '../config/erpConfig';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
+
+// 👇 collections service
+import {
+  fetchCollectionsForLoggedInUser,
+  FOSCollectionResponse,
+} from '../services/collectionService';
 
 type HomeScreenProps = {
   fullName?: string;
@@ -30,7 +36,7 @@ type TileProps = {
 };
 
 const BRAND_COLOR = '#397E8A';
-const BRAND_BLUE = '#3b82f6';
+const BRAND_BLUE = '#397E8A';
 
 // Helper: JS Date → "YYYY-MM-DD" (same format as FOS Attendance.attendance_date)
 function formatDateForErp(date: Date): string {
@@ -40,6 +46,22 @@ function formatDateForErp(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+// same helpers as in CollectionScreen for date comparison
+function parseErpOrIsoDate(value?: string | null): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return d;
+}
+
+function isSameCalendarDate(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
   const navigation = useNavigation<any>();
   const colorScheme = useColorScheme();
@@ -47,15 +69,24 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
 
   const styles = React.useMemo(() => createStyles(isDark), [isDark]);
 
-  // use fullName as agent name filter (can change later if you have separate agent field)
   const agentName = fullName;
 
   // ─────────────────────────────────────────────
   // Attendance state
   // ─────────────────────────────────────────────
-  const [attendanceMarkedToday, setAttendanceMarkedToday] =
-    React.useState<boolean | null>(null); // null = unknown
+  const [attendanceMarkedToday, setAttendanceMarkedToday] = React.useState<
+    boolean | null
+  >(null); // null = unknown
   const [loadingAttendance, setLoadingAttendance] =
+    React.useState<boolean>(true);
+
+  // ─────────────────────────────────────────────
+  // Collections state for Pending Amount & Today Collected
+  // ─────────────────────────────────────────────
+  const [collections, setCollections] = React.useState<FOSCollectionResponse[]>(
+    [],
+  );
+  const [loadingCollections, setLoadingCollections] =
     React.useState<boolean>(true);
 
   const openDrawer = () => {
@@ -64,10 +95,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
 
   const goPriorityBucket = () => navigation.navigate('PriorityBucket');
 
-  // pass agentName as param to MyList
   const goMyList = () =>
     navigation.navigate('MyList', {
-      agentName, // used in MyListScreen to filter cases
+      agentName,
     });
 
   const goCollection = () => navigation.navigate('Collection');
@@ -92,9 +122,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
     </Pressable>
   );
 
-  // ---------- Mark Attendance button handler ----------
   const handleMarkAttendance = () => {
-    // Switch to the Attendance drawer stack
     navigation.getParent()?.navigate('AttendanceDrawer');
   };
 
@@ -105,14 +133,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
     try {
       setLoadingAttendance(true);
 
-      // 1) Get logged-in ERP user email
       const userRes = await fetch(ERP_GET_LOGGED_USER_URL, {
         method: 'GET',
         headers: { Accept: 'application/json' },
       });
 
       if (!userRes.ok) {
-        // If we can't get user, allow marking attendance instead of blocking
         throw new Error(`Failed to get logged user: ${userRes.status}`);
       }
 
@@ -123,7 +149,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
         throw new Error('Invalid get_logged_user response');
       }
 
-      // 2) Build filters: user = email AND attendance_date = today
       const today = formatDateForErp(new Date());
 
       const params = new URLSearchParams();
@@ -158,20 +183,64 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
       setAttendanceMarkedToday(alreadyMarked);
     } catch (err) {
       console.warn('HomeScreen: failed to check today attendance', err);
-      // On error → treat as "not marked" so agent can still mark
       setAttendanceMarkedToday(false);
     } finally {
       setLoadingAttendance(false);
     }
   }, []);
 
-  React.useEffect(() => {
-    checkTodayAttendance();
-  }, [checkTodayAttendance]);
+  // ─────────────────────────────────────────────
+  // Load collections summary (for Pending & Today)
+  // ─────────────────────────────────────────────
+  const loadCollectionsSummary = React.useCallback(async () => {
+    try {
+      setLoadingCollections(true);
+      const data = await fetchCollectionsForLoggedInUser();
+      setCollections(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.warn('HomeScreen: failed to load collections summary', err);
+      setCollections([]);
+    } finally {
+      setLoadingCollections(false);
+    }
+  }, []);
+
+  // ❗ REAL-TIME: re-run whenever HomeScreen gets focus
+  useFocusEffect(
+    React.useCallback(() => {
+      checkTodayAttendance();
+      loadCollectionsSummary();
+    }, [checkTodayAttendance, loadCollectionsSummary]),
+  );
+
+  const today = new Date();
+
+  const { pendingAmount, todayCollected } = React.useMemo(() => {
+    let pending = 0;
+    let todayTotal = 0;
+
+    for (const c of collections) {
+      const amount = Number(c.amount) || 0;
+
+      if (c.is_deposited !== 1) {
+        pending += amount;
+      }
+
+      const d =
+        parseErpOrIsoDate((c as any).collection_datetime) ||
+        parseErpOrIsoDate(c.creation);
+
+      if (d && isSameCalendarDate(d, today)) {
+        todayTotal += amount;
+      }
+    }
+
+    return { pendingAmount: pending, todayCollected: todayTotal };
+  }, [collections]);
 
   return (
     <View style={styles.container}>
-      {/* Header with hamburger and app name */}
+      {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.menuButton} onPress={openDrawer}>
           <View style={styles.menuLine} />
@@ -190,12 +259,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
       {/* Top summary strip */}
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Pending Deposit</Text>
-          <Text style={styles.summaryAmount}>₹0</Text>
+          <Text style={styles.summaryLabel}>Pending Amount</Text>
+          <Text style={styles.summaryAmount}>
+            {loadingCollections ? '₹0' : `₹${pendingAmount.toFixed(2)}`}
+          </Text>
         </View>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Unverified Amount</Text>
-          <Text style={styles.summaryAmount}>₹0</Text>
+          <Text style={styles.summaryLabel}>Today Collected</Text>
+          <Text style={styles.summaryAmount}>
+            {loadingCollections ? '₹0' : `₹${todayCollected.toFixed(2)}`}
+          </Text>
         </View>
       </View>
 
@@ -205,14 +278,16 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero card above My Cases */}
+        {/* Hero card */}
         <View style={styles.heroCard}>
           <View style={styles.heroPill}>
             <View style={styles.heroDot} />
             <Text style={styles.heroPillText}>FOS - FIELD OPERATIONS</Text>
           </View>
 
-          <Text style={styles.heroTitle}>Plan. Visit. Collect. Close.</Text>
+          <Text style={styles.heroTitle}>
+            Mark Attendance. My List. Collection. Deposite.
+          </Text>
           <Text style={styles.heroSubtitle}>
             Follow today’s simple checklist to start your FOS day, cover the
             route, record collections and finish day-end from one place.
@@ -224,15 +299,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
           <Text style={styles.sectionTitle}>My Cases</Text>
           <View style={styles.tileRow}>
             <Tile
-              title="Priority Bucket"
-              onPress={goPriorityBucket}
-              iconName="flag"
-            />
-            <Tile
               title="My List"
               subtitle="All Cases"
               onPress={goMyList}
               iconName="list-alt"
+            />
+            <Tile
+              title="Priority Bucket"
+              onPress={goPriorityBucket}
+              iconName="flag"
             />
           </View>
         </View>
@@ -246,11 +321,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
               onPress={goCollection}
               iconName="rupee-sign"
             />
-            <Tile
-              title="Deposit"
-              onPress={goDeposit}
-              iconName="university"
-            />
+            <Tile title="Deposit" onPress={goDeposit} iconName="university" />
           </View>
         </View>
 
@@ -259,7 +330,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
           record collections and deposits.
         </Text>
 
-        {/* Attendance UI based on today's status */}
+        {/* Attendance UI */}
         {loadingAttendance ? (
           <View style={styles.attendanceCheckingWrapper}>
             <Text style={styles.attendanceCheckingText}>
@@ -335,8 +406,8 @@ const createStyles = (isDark: boolean) =>
       flexDirection: 'row',
       backgroundColor: BRAND_COLOR,
       paddingHorizontal: 18,
-      paddingBottom: 20, // 22 - 2
-      paddingTop: 6, // 8 - 2
+      paddingBottom: 20,
+      paddingTop: 6,
       columnGap: 10,
     },
     summaryCard: {
@@ -363,12 +434,11 @@ const createStyles = (isDark: boolean) =>
     },
     scrollContent: {
       paddingHorizontal: 16,
-      paddingTop: 20, // 22 - 2
-      paddingBottom: 38, // 40 - 2
-      rowGap: 22, // 24 - 2
+      paddingTop: 20,
+      paddingBottom: 38,
+      rowGap: 22,
     },
 
-    // Hero card styles
     heroCard: {
       backgroundColor: isDark ? '#0b1220' : '#ffffff',
       borderRadius: 18,
@@ -418,13 +488,13 @@ const createStyles = (isDark: boolean) =>
     },
 
     section: {
-      marginTop: 14, // 16 - 2
+      marginTop: 14,
     },
     sectionTitle: {
       fontSize: 16,
       fontWeight: '700',
       color: isDark ? '#e5e7eb' : '#111827',
-      marginBottom: 10, // 12 - 2
+      marginBottom: 10,
     },
     tileRow: {
       flexDirection: 'row',
@@ -465,12 +535,11 @@ const createStyles = (isDark: boolean) =>
     helperText: {
       fontSize: 12,
       color: isDark ? '#9ca3af' : '#6b7280',
-      marginTop: 8, // 10 - 2
+      marginTop: 8,
     },
 
-    // Bottom Mark Attendance button
     attendanceButton: {
-      marginTop: 20, // 22 - 2
+      marginTop: 20,
       borderRadius: 9999,
       paddingVertical: 14,
       alignItems: 'center',
@@ -483,9 +552,8 @@ const createStyles = (isDark: boolean) =>
       color: '#ffffff',
     },
 
-    // attendance status / loading UI
     attendanceCheckingWrapper: {
-      marginTop: 16, // 18 - 2
+      marginTop: 16,
       borderRadius: 9999,
       paddingVertical: 12,
       paddingHorizontal: 14,
@@ -498,7 +566,7 @@ const createStyles = (isDark: boolean) =>
       color: isDark ? '#9ca3af' : '#4b5563',
     },
     attendanceInfoCard: {
-      marginTop: 16, // 18 - 2
+      marginTop: 16,
       borderRadius: 14,
       paddingVertical: 12,
       paddingHorizontal: 14,
