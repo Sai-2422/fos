@@ -277,7 +277,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
           </View>
 
           <Text style={styles.heroTitle}>
-            Mark Attendance. My List. Collection. Deposite.
+            Plan. Visit. Collect. Close.
           </Text>
           <Text style={styles.heroSubtitle}>
             Follow today's simple checklist to start your FOS day, cover the
