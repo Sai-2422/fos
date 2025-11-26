@@ -663,12 +663,12 @@ const DepositScreen: React.FC = () => {
                     </Text>
                   </View>
 
-                  <TouchableOpacity
+                  {/* <TouchableOpacity
                     onPress={() => handleDelete(row.name)}
                     style={styles.deleteBtn}
                   >
                     <Feather name="trash-2" size={16} color="#dc2626" />
-                  </TouchableOpacity>
+                  </TouchableOpacity> */}
                 </View>
               </View>
             ))}

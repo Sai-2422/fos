@@ -18,6 +18,7 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 
+// 👇 collections service
 import {
   fetchCollectionsForLoggedInUser,
   FOSCollectionResponse,
@@ -37,6 +38,7 @@ type TileProps = {
 const BRAND_COLOR = '#397E8A';
 const BRAND_BLUE = '#397E8A';
 
+// Helper: JS Date → "YYYY-MM-DD" (same format as FOS Attendance.attendance_date)
 function formatDateForErp(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -44,6 +46,7 @@ function formatDateForErp(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+// same helpers as in CollectionScreen for date comparison
 function parseErpOrIsoDate(value?: string | null): Date | null {
   if (!value) return null;
   const d = new Date(value);
@@ -73,12 +76,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
   // ─────────────────────────────────────────────
   const [attendanceMarkedToday, setAttendanceMarkedToday] = React.useState<
     boolean | null
-  >(null);
+  >(null); // null = unknown
   const [loadingAttendance, setLoadingAttendance] =
     React.useState<boolean>(true);
 
   // ─────────────────────────────────────────────
-  // Collections state
+  // Collections state for Pending Amount & Today Collected
   // ─────────────────────────────────────────────
   const [collections, setCollections] = React.useState<FOSCollectionResponse[]>(
     [],
@@ -91,7 +94,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
   };
 
   const goPriorityBucket = () => navigation.navigate('PriorityBucket');
-  const goMyList = () => navigation.navigate('MyList', { agentName });
+
+  const goMyList = () =>
+    navigation.navigate('MyList', {
+      agentName,
+    });
+
   const goCollection = () => navigation.navigate('Collection');
   const goDeposit = () => navigation.navigate('Deposit');
 
@@ -182,7 +190,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
   }, []);
 
   // ─────────────────────────────────────────────
-  // Load collections summary
+  // Load collections summary (for Pending & Today)
   // ─────────────────────────────────────────────
   const loadCollectionsSummary = React.useCallback(async () => {
     try {
@@ -197,6 +205,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
     }
   }, []);
 
+  // ❗ REAL-TIME: re-run whenever HomeScreen gets focus
   useFocusEffect(
     React.useCallback(() => {
       checkTodayAttendance();
@@ -276,11 +285,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
             <Text style={styles.heroPillText}>FOS - FIELD OPERATIONS</Text>
           </View>
 
-          <Text style={styles.heroTitle}>
-            Plan. Visit. Collect. Close.
-          </Text>
+          <Text style={styles.heroTitle}>Plan. Visit. Collect. Close.</Text>
           <Text style={styles.heroSubtitle}>
-            Follow today's simple checklist to start your FOS day, cover the
+            Follow today’s simple checklist to start your FOS day, cover the
             route, record collections and finish day-end from one place.
           </Text>
         </View>
@@ -321,7 +328,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
           record collections and deposits.
         </Text>
 
-        {/* ✅ UPDATED: Only show Mark Attendance button when NOT loading AND NOT already marked */}
+        {/* Attendance UI – show button only when NOT loading and NOT already marked */}
         {!loadingAttendance && !attendanceMarkedToday && (
           <Pressable
             style={styles.attendanceButton}
@@ -414,6 +421,7 @@ const createStyles = (isDark: boolean) =>
       paddingBottom: 38,
       rowGap: 22,
     },
+
     heroCard: {
       backgroundColor: isDark ? '#0b1220' : '#ffffff',
       borderRadius: 18,
@@ -461,6 +469,7 @@ const createStyles = (isDark: boolean) =>
       fontSize: 13,
       color: isDark ? '#9ca3af' : '#4b5563',
     },
+
     section: {
       marginTop: 14,
     },
@@ -511,6 +520,7 @@ const createStyles = (isDark: boolean) =>
       color: isDark ? '#9ca3af' : '#6b7280',
       marginTop: 8,
     },
+
     attendanceButton: {
       marginTop: 20,
       borderRadius: 9999,
@@ -524,12 +534,39 @@ const createStyles = (isDark: boolean) =>
       fontWeight: '600',
       color: '#ffffff',
     },
-    // ❌ These styles are no longer needed - you can remove them
-    // attendanceCheckingWrapper: { ... },
-    // attendanceCheckingText: { ... },
-    // attendanceInfoCard: { ... },
-    // attendanceInfoTitle: { ... },
-    // attendanceInfoText: { ... },
+
+    attendanceCheckingWrapper: {
+      marginTop: 16,
+      borderRadius: 9999,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? '#020617' : '#e5e7eb',
+    },
+    attendanceCheckingText: {
+      fontSize: 13,
+      color: isDark ? '#9ca3af' : '#4b5563',
+    },
+    attendanceInfoCard: {
+      marginTop: 16,
+      borderRadius: 14,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      backgroundColor: isDark ? '#022c22' : '#ecfdf5',
+      borderWidth: 1,
+      borderColor: isDark ? '#064e3b' : '#6ee7b7',
+    },
+    attendanceInfoTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: isDark ? '#bbf7d0' : '#166534',
+      marginBottom: 4,
+    },
+    attendanceInfoText: {
+      fontSize: 12,
+      color: isDark ? '#a7f3d0' : '#065f46',
+    },
   });
 
 export default HomeScreen;

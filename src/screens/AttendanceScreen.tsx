@@ -27,7 +27,7 @@ import {
   AttendanceStatus,
 } from '../services/attendanceService';
 
-const BRAND_PURPLE = '#3b82f6'; // button color
+const BRAND_PURPLE = '#397E8A'; // button color
 const CARD_BG_LIGHT = '#ffffff';
 const CARD_BG_DARK = '#020617';
 
@@ -692,7 +692,7 @@ const createStyles = (isDark: boolean) =>
       borderRadius: 27,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: '#1d4ed8',
+      backgroundColor: '#397E8A',
       marginRight: 12,
     },
     heroTextBlock: {
