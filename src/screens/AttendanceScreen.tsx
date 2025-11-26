@@ -466,7 +466,7 @@ const AttendanceScreen: React.FC = () => {
             {/* Illustration-style card */}
             <View style={styles.heroCard}>
               <View style={styles.heroAvatar}>
-                <FontAwesome5 name="user" size={32} color="#facc15" />
+                <FontAwesome5 name="user" size={32} color="#fff" />
               </View>
               <View style={styles.heroTextBlock}>
                 <Text style={styles.heroTitle}>Ready to start your day?</Text>
