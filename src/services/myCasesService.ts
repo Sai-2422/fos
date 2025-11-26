@@ -10,10 +10,20 @@ import {
 
 // Status options for FOS Case.status field
 // (update this array if you add more statuses in ERPNext)
-export const CASE_STATUS_OPTIONS: string[] = ['Open', 'Visit Planned', 'Closed'];
+export const CASE_STATUS_OPTIONS: string[] = [
+  'Open',
+  'Visit Planned',
+  'Pending',
+  'Closed',
+];
 
 // Outcome Type options – keep in sync with FOS Case.outcome_type select
-export const OUTCOME_TYPE_OPTIONS: string[] = ['Reschedule', 'KYC'];
+export const OUTCOME_TYPE_OPTIONS: string[] = [
+  'Completed',
+  'Reschedule',
+  'No Response',
+  'Customer Not on Location',
+];
 
 export type KycDocument = {
   name: string;
@@ -35,6 +45,10 @@ export type AgentCase = {
   address: string; // current_address
 
   priority?: string | null; // High / Low / etc.
+
+  // Type of Visit / product_type
+  typeOfVisit?: string | null; // our internal naming
+  productType?: string | null; // camel-case mirror of product_type
 
   visitDate?: string | null; // visit_date
   outcomeType?: string | null; // outcome_type
@@ -110,6 +124,7 @@ export async function fetchCasesForAgent(
       'dpd',
       'current_address',
       'priority',
+      'product_type',      // ⬅️ Type of Visit (Payment / KYC)
       'visit_date',
       'outcome_type',
       'reschedule_date',
@@ -154,10 +169,17 @@ export async function fetchCasesForAgent(
         : Number(row.dpd || 0),
     address: row.current_address || '',
     priority: row.priority || null,
+
+    // Map product_type into our Type of Visit fields
+    typeOfVisit: row.product_type || null,
+    productType: row.product_type || null,
+
     visitDate: row.visit_date || null,
     outcomeType: row.outcome_type || null,
     rescheduleDate: row.reschedule_date || null,
     visitSelfie: row.visit_selfie || null,
+
+    // Existing KYC rows are not loaded yet (we can extend later)
     kycDocuments: [],
   }));
 }

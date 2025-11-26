@@ -23,8 +23,6 @@ import DateTimePicker, {
 } from '@react-native-community/datetimepicker';
 import {
   AgentCase,
-  CASE_STATUS_OPTIONS,
-  OUTCOME_TYPE_OPTIONS,
   fetchCasesForAgent,
   updateCaseStatus,
   updateCaseOutcome,
@@ -34,12 +32,45 @@ import {
 import {
   Asset,
   CameraOptions,
-  ImageLibraryOptions,
   launchCamera,
-  launchImageLibrary,
 } from 'react-native-image-picker';
 
 const BRAND_BLUE = '#397E8A';
+
+// ─────────────────────────────────────────────
+// Static options
+// ─────────────────────────────────────────────
+
+const CASE_STATUS_OPTIONS = [
+  'Open',
+  'Visit Planned',
+  'Pending',
+  'Closed',
+] as const;
+
+const OUTCOME_TYPE_OPTIONS = [
+  'Completed',
+  'Reschedule',
+  'No Response',
+  'Customer Not on Location',
+] as const;
+
+type DateFilterKey =
+  | 'ALL'
+  | 'TODAY'
+  | 'YESTERDAY'
+  | 'LAST_WEEK'
+  | 'THIS_MONTH'
+  | 'LAST_MONTH';
+
+const DATE_FILTER_OPTIONS: { key: DateFilterKey; label: string }[] = [
+  { key: 'ALL', label: 'All' },
+  { key: 'TODAY', label: 'Today' },
+  { key: 'YESTERDAY', label: 'Yesterday' },
+  { key: 'LAST_WEEK', label: 'Last week' },
+  { key: 'THIS_MONTH', label: 'This month' },
+  { key: 'LAST_MONTH', label: 'Last month' },
+];
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -54,7 +85,7 @@ async function requestCameraPermission(): Promise<boolean> {
     PermissionsAndroid.PERMISSIONS.CAMERA,
     {
       title: 'Camera Permission',
-      message: 'We need access to your camera to click visit selfie.',
+      message: 'We need access to your camera.',
       buttonPositive: 'OK',
       buttonNegative: 'Cancel',
     },
@@ -81,6 +112,27 @@ function formatYYYYMMDD(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/**
+ * Reads Type of Visit from whatever field backend sends:
+ * - typeOfVisit (old)
+ * - productType  (camel)
+ * - product_type (ERPNext)
+ */
+function resolveCaseType(c: AgentCase | null): string {
+  if (!c) return '';
+  const asAny = c as any;
+  const raw =
+    asAny.typeOfVisit ||
+    asAny.productType ||
+    asAny.product_type ||
+    '';
+  return typeof raw === 'string' ? raw : '';
+}
+
 // ─────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────
@@ -99,6 +151,10 @@ const MyListScreen: React.FC = () => {
   const [refreshing, setRefreshing] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  // Filter state
+  const [activeFilter, setActiveFilter] =
+    React.useState<DateFilterKey>('ALL');
+
   // Modal state
   const [selectedCase, setSelectedCase] = React.useState<AgentCase | null>(
     null,
@@ -111,19 +167,19 @@ const MyListScreen: React.FC = () => {
     React.useState<boolean>(false);
   const [editRescheduleDate, setEditRescheduleDate] =
     React.useState<string>('');
-  const [rescheduleDateObj, setRescheduleDateObj] = React.useState<Date | null>(
-    null,
-  );
+  const [rescheduleDateObj, setRescheduleDateObj] =
+    React.useState<Date | null>(null);
   const [showReschedulePicker, setShowReschedulePicker] =
     React.useState<boolean>(false);
 
-  const [visitSelfieAsset, setVisitSelfieAsset] = React.useState<Asset | null>(
-    null,
-  );
+  const [visitSelfieAsset, setVisitSelfieAsset] =
+    React.useState<Asset | null>(null);
   const [kycDocType, setKycDocType] = React.useState<string>('');
   const [kycDocNo, setKycDocNo] = React.useState<string>('');
-  const [kycFrontAsset, setKycFrontAsset] = React.useState<Asset | null>(null);
-  const [kycBackAsset, setKycBackAsset] = React.useState<Asset | null>(null);
+  const [kycFrontAsset, setKycFrontAsset] =
+    React.useState<Asset | null>(null);
+  const [kycBackAsset, setKycBackAsset] =
+    React.useState<Asset | null>(null);
   const [savingVisit, setSavingVisit] = React.useState<boolean>(false);
 
   const loadCases = React.useCallback(async () => {
@@ -223,34 +279,22 @@ const MyListScreen: React.FC = () => {
     setShowReschedulePicker(false);
   };
 
-  const pickImageFromLibrary = async (onPicked: (asset: Asset) => void) => {
-    const options: ImageLibraryOptions = {
-      mediaType: 'photo',
-      quality: 0.7,
-    };
-
-    const result = await launchImageLibrary(options);
-    if (result.didCancel || !result.assets || result.assets.length === 0) {
-      return;
-    }
-
-    const asset = result.assets[0];
-    onPicked(asset);
-  };
-
-  const pickVisitSelfie = React.useCallback(async () => {
+  const pickImageWithCamera = async (
+    cameraType: 'front' | 'back',
+    onPicked: (asset: Asset) => void,
+  ) => {
     const hasPermission = await requestCameraPermission();
     if (!hasPermission) {
       Alert.alert(
         'Permission required',
-        'Camera permission is needed to click visit selfie.',
+        'Camera permission is needed to capture image.',
       );
       return;
     }
 
     const options: CameraOptions = {
       mediaType: 'photo',
-      cameraType: 'front',
+      cameraType,
       saveToPhotos: false,
     };
 
@@ -267,18 +311,22 @@ const MyListScreen: React.FC = () => {
       }
       const asset = response.assets && response.assets[0];
       if (asset) {
-        setVisitSelfieAsset(asset);
+        onPicked(asset);
       }
     });
+  };
+
+  const pickVisitSelfie = React.useCallback(async () => {
+    await pickImageWithCamera('front', asset => setVisitSelfieAsset(asset));
   }, []);
 
-  const pickKycFront = () => {
-    pickImageFromLibrary(asset => setKycFrontAsset(asset));
-  };
+  const pickKycFront = React.useCallback(async () => {
+    await pickImageWithCamera('back', asset => setKycFrontAsset(asset));
+  }, []);
 
-  const pickKycBack = () => {
-    pickImageFromLibrary(asset => setKycBackAsset(asset));
-  };
+  const pickKycBack = React.useCallback(async () => {
+    await pickImageWithCamera('back', asset => setKycBackAsset(asset));
+  }, []);
 
   const handleVisitDateChange = (event: DateTimePickerEvent, date?: Date) => {
     if (Platform.OS !== 'ios') {
@@ -308,6 +356,10 @@ const MyListScreen: React.FC = () => {
   const handleSaveVisitDetails = async () => {
     if (!selectedCase) return;
 
+    const caseType = resolveCaseType(selectedCase);
+    const normCaseType = caseType ? caseType.trim().toUpperCase() : '';
+    const isKycVisit = normCaseType === 'KYC';
+
     try {
       setSavingVisit(true);
 
@@ -324,14 +376,14 @@ const MyListScreen: React.FC = () => {
         rescheduleDate: editOutcome === 'Reschedule' ? editRescheduleDate : '',
       });
 
-      // 3) Visit selfie (camera)
+      // 3) Visit selfie
       if (visitSelfieAsset) {
         await uploadCaseSelfie(selectedCase.id, visitSelfieAsset);
       }
 
-      // 4) KYC row (only if outcome is KYC and we have minimum data)
+      // 4) KYC row (only for Type of Visit = KYC)
       if (
-        editOutcome === 'KYC' &&
+        isKycVisit &&
         kycDocType &&
         kycDocNo &&
         (kycFrontAsset || kycBackAsset)
@@ -354,9 +406,58 @@ const MyListScreen: React.FC = () => {
     }
   };
 
+  const filteredCases = React.useMemo(() => {
+    if (activeFilter === 'ALL') return cases;
+
+    const today = startOfDay(new Date());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const lastWeekStart = new Date(today);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+
+    const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastMonthStart = new Date(
+      today.getFullYear(),
+      today.getMonth() - 1,
+      1,
+    );
+    const lastMonthEnd = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      0,
+    );
+
+    return cases.filter(item => {
+      const visitStr = (item.visitDate as string) || '';
+      const parsed = parseYYYYMMDD(visitStr);
+      if (!parsed) {
+        // If no date is set, only show in "All"
+        return false;
+      }
+      const date = startOfDay(parsed);
+
+      switch (activeFilter) {
+        case 'TODAY':
+          return date.getTime() === today.getTime();
+        case 'YESTERDAY':
+          return date.getTime() === yesterday.getTime();
+        case 'LAST_WEEK':
+          return date < today && date >= lastWeekStart;
+        case 'THIS_MONTH':
+          return date >= thisMonthStart && date <= today;
+        case 'LAST_MONTH':
+          return date >= lastMonthStart && date <= lastMonthEnd;
+        default:
+          return true;
+      }
+    });
+  }, [cases, activeFilter]);
+
   const renderItem = ({ item }: { item: AgentCase }) => {
     const priorityLower =
       typeof item.priority === 'string' ? item.priority.toLowerCase() : '';
+    const typeOfVisit = resolveCaseType(item);
 
     return (
       <TouchableOpacity
@@ -370,6 +471,11 @@ const MyListScreen: React.FC = () => {
               {item.customer || 'Unknown customer'}
             </Text>
             <Text style={styles.caseId}>{item.caseId}</Text>
+            {typeOfVisit ? (
+              <Text style={styles.typeOfVisitText}>
+                Type of Visit: {typeOfVisit}
+              </Text>
+            ) : null}
           </View>
 
           <View style={styles.cardHeaderRight}>
@@ -399,7 +505,9 @@ const MyListScreen: React.FC = () => {
         </View>
 
         <View style={styles.metaRow}>
-          <Text style={styles.metaText}>Overdue: ₹ {item.overdueAmount}</Text>
+          <Text style={styles.metaText}>
+            Overdue: ₹ {item.overdueAmount}
+          </Text>
           <Text style={styles.metaText}>DPD: {item.dpd}</Text>
         </View>
 
@@ -412,7 +520,9 @@ const MyListScreen: React.FC = () => {
         <View style={styles.footerRow}>
           <Text style={styles.metaText}>Agent: {item.agent || '-'}</Text>
           {item.outcomeType ? (
-            <Text style={styles.metaText}>Outcome: {item.outcomeType}</Text>
+            <Text style={styles.metaText}>
+              Outcome: {item.outcomeType}
+            </Text>
           ) : null}
         </View>
       </TouchableOpacity>
@@ -421,18 +531,45 @@ const MyListScreen: React.FC = () => {
 
   const keyExtractor = (item: AgentCase) => item.id;
 
+  const caseTypeForModal = resolveCaseType(selectedCase);
+  const isKycVisitForModal =
+    (caseTypeForModal || '').trim().toUpperCase() === 'KYC';
+
+  const hasAnyCases = cases.length > 0;
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>My List</Text>
-        {/* <Text style={styles.subtitle}>
-          All FOS cases assigned to you across all regions.
-        </Text>
-        {agentName && (
-          <Text style={styles.agentLine}>
-            Agent: <Text style={styles.agentName}>{agentName}</Text>
-          </Text>
-        )} */}
+      </View>
+
+      {/* Day-wise filter chips */}
+      <View style={styles.filterWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScroll}
+        >
+          {DATE_FILTER_OPTIONS.map(opt => (
+            <TouchableOpacity
+              key={opt.key}
+              style={[
+                styles.filterChip,
+                activeFilter === opt.key && styles.filterChipActive,
+              ]}
+              onPress={() => setActiveFilter(opt.key)}
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  activeFilter === opt.key && styles.filterChipTextActive,
+                ]}
+              >
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       {loading && !refreshing ? (
@@ -447,16 +584,23 @@ const MyListScreen: React.FC = () => {
             Tap to retry
           </Text>
         </View>
-      ) : cases.length === 0 ? (
+      ) : !hasAnyCases ? (
         <View style={styles.center}>
           <Text style={styles.emptyTitle}>No cases yet</Text>
           <Text style={styles.emptySubtitle}>
             When cases are assigned to you, they will appear here.
           </Text>
         </View>
+      ) : filteredCases.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.emptyTitle}>No cases in this filter</Text>
+          <Text style={styles.emptySubtitle}>
+            Try changing the day-wise filter above.
+          </Text>
+        </View>
       ) : (
         <FlatList
-          data={cases}
+          data={filteredCases}
           keyExtractor={keyExtractor}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
@@ -466,198 +610,232 @@ const MyListScreen: React.FC = () => {
         />
       )}
 
-      {/* Visit details / Outcome modal */}
+      {/* Full-screen Visit details / Outcome modal */}
       {selectedCase && (
-        <Modal visible animationType="slide" transparent>
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalContainer}>
-              <ScrollView contentContainerStyle={styles.modalScroll}>
-                <Text style={styles.modalTitle}>{selectedCase.customer}</Text>
-                <Text style={styles.modalSubtitle}>{selectedCase.caseId}</Text>
-
-                <Text style={styles.modalSectionLabel}>
-                  Visit Date (YYYY-MM-DD)
-                </Text>
-                <TouchableOpacity
-                  style={styles.input}
-                  onPress={() => setShowVisitDatePicker(true)}
-                >
-                  <Text
-                    style={
-                      editVisitDate ? styles.inputText : styles.inputPlaceholder
-                    }
-                  >
-                    {editVisitDate || 'Tap to pick date'}
-                  </Text>
-                </TouchableOpacity>
-                {showVisitDatePicker && (
-                  <DateTimePicker
-                    value={visitDateObj || new Date()}
-                    mode="date"
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    onChange={handleVisitDateChange}
-                  />
-                )}
-
-                <Text style={styles.modalSectionLabel}>Status</Text>
-                <View style={styles.chipRow}>
-                  {CASE_STATUS_OPTIONS.map(status => (
-                    <TouchableOpacity
-                      key={status}
-                      style={[
-                        styles.chip,
-                        editStatus === status && styles.chipSelected,
-                      ]}
-                      onPress={() => setEditStatus(status)}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          editStatus === status && styles.chipTextSelected,
-                        ]}
-                      >
-                        {status}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <Text style={styles.modalSectionLabel}>Outcome Type</Text>
-                <View style={styles.chipRow}>
-                  {OUTCOME_TYPE_OPTIONS.map(outcome => (
-                    <TouchableOpacity
-                      key={outcome}
-                      style={[
-                        styles.chip,
-                        editOutcome === outcome && styles.chipSelected,
-                      ]}
-                      onPress={() => setEditOutcome(outcome)}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          editOutcome === outcome && styles.chipTextSelected,
-                        ]}
-                      >
-                        {outcome}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {editOutcome === 'Reschedule' && (
-                  <>
-                    <Text style={styles.modalSectionLabel}>
-                      Reschedule Date (YYYY-MM-DD)
-                    </Text>
-                    <TouchableOpacity
-                      style={styles.input}
-                      onPress={() => setShowReschedulePicker(true)}
-                    >
-                      <Text
-                        style={
-                          editRescheduleDate
-                            ? styles.inputText
-                            : styles.inputPlaceholder
-                        }
-                      >
-                        {editRescheduleDate || 'Tap to pick date'}
-                      </Text>
-                    </TouchableOpacity>
-                    {showReschedulePicker && (
-                      <DateTimePicker
-                        value={rescheduleDateObj || new Date()}
-                        mode="date"
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        onChange={handleRescheduleDateChange}
-                      />
-                    )}
-                  </>
-                )}
-
-                <Text style={styles.modalSectionLabel}>Visit Selfie</Text>
-                <TouchableOpacity
-                  style={styles.secondaryButton}
-                  onPress={pickVisitSelfie}
-                >
-                  <Text style={styles.secondaryButtonText}>
-                    {visitSelfieAsset ? 'Retake selfie' : 'Click selfie'}
-                  </Text>
-                </TouchableOpacity>
-                {visitSelfieAsset && (
-                  <Text style={styles.helperText}>
-                    Selected: {visitSelfieAsset.fileName || 'image'}
-                  </Text>
-                )}
-
-                {editOutcome === 'KYC' && (
-                  <>
-                    <Text style={styles.modalSectionLabel}>
-                      KYC Document Type
-                    </Text>
-                    <TextInput
-                      style={styles.input}
-                      value={kycDocType}
-                      onChangeText={setKycDocType}
-                      placeholder="e.g. Aadhaar"
-                      placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
-                    />
-                    <Text style={styles.modalSectionLabel}>
-                      KYC Document Number
-                    </Text>
-                    <TextInput
-                      style={styles.input}
-                      value={kycDocNo}
-                      onChangeText={setKycDocNo}
-                      placeholder="1234 5678 9012"
-                      placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
-                    />
-
-                    <Text style={styles.modalSectionLabel}>
-                      KYC Front Image
-                    </Text>
-                    <TouchableOpacity
-                      style={styles.secondaryButton}
-                      onPress={pickKycFront}
-                    >
-                      <Text style={styles.secondaryButtonText}>
-                        {kycFrontAsset ? 'Change front image' : 'Attach front'}
-                      </Text>
-                    </TouchableOpacity>
-
-                    <Text style={styles.modalSectionLabel}>KYC Back Image</Text>
-                    <TouchableOpacity
-                      style={styles.secondaryButton}
-                      onPress={pickKycBack}
-                    >
-                      <Text style={styles.secondaryButtonText}>
-                        {kycBackAsset ? 'Change back image' : 'Attach back'}
-                      </Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-
-                <View style={styles.modalButtonsRow}>
-                  <TouchableOpacity
-                    style={styles.cancelButton}
-                    onPress={closeModal}
-                    disabled={savingVisit}
-                  >
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.primaryButton}
-                    onPress={handleSaveVisitDetails}
-                    disabled={savingVisit}
-                  >
-                    <Text style={styles.primaryButtonText}>
-                      {savingVisit ? 'Saving…' : 'Save'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
+        <Modal visible animationType="slide">
+          <View style={styles.fullscreenModal}>
+            <View style={styles.modalTopBar}>
+              <Text style={styles.modalTopBarTitle}>Visit Details</Text>
+              <TouchableOpacity
+                onPress={closeModal}
+                disabled={savingVisit}
+              >
+                <Text style={styles.modalCloseText}>Close</Text>
+              </TouchableOpacity>
             </View>
+
+            <ScrollView contentContainerStyle={styles.modalScroll}>
+              <Text style={styles.modalTitle}>{selectedCase.customer}</Text>
+              <Text style={styles.modalSubtitle}>
+                {selectedCase.caseId}
+              </Text>
+
+              {caseTypeForModal ? (
+                <Text style={styles.modalTypeOfVisit}>
+                  Type of Visit: {caseTypeForModal}
+                </Text>
+              ) : null}
+
+              <Text style={styles.modalSectionLabel}>
+                Visit Date (YYYY-MM-DD)
+              </Text>
+              <TouchableOpacity
+                style={styles.input}
+                onPress={() => setShowVisitDatePicker(true)}
+              >
+                <Text
+                  style={
+                    editVisitDate
+                      ? styles.inputText
+                      : styles.inputPlaceholder
+                  }
+                >
+                  {editVisitDate || 'Tap to pick date'}
+                </Text>
+              </TouchableOpacity>
+              {showVisitDatePicker && (
+                <DateTimePicker
+                  value={visitDateObj || new Date()}
+                  mode="date"
+                  display={
+                    Platform.OS === 'ios' ? 'spinner' : 'default'
+                  }
+                  onChange={handleVisitDateChange}
+                />
+              )}
+
+              <Text style={styles.modalSectionLabel}>Status</Text>
+              <View style={styles.chipRow}>
+                {CASE_STATUS_OPTIONS.map(status => (
+                  <TouchableOpacity
+                    key={status}
+                    style={[
+                      styles.chip,
+                      editStatus === status && styles.chipSelected,
+                    ]}
+                    onPress={() => setEditStatus(status)}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        editStatus === status &&
+                          styles.chipTextSelected,
+                      ]}
+                    >
+                      {status}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.modalSectionLabel}>Outcome Type</Text>
+              <View style={styles.chipRow}>
+                {OUTCOME_TYPE_OPTIONS.map(outcome => (
+                  <TouchableOpacity
+                    key={outcome}
+                    style={[
+                      styles.chip,
+                      editOutcome === outcome && styles.chipSelected,
+                    ]}
+                    onPress={() => setEditOutcome(outcome)}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        editOutcome === outcome &&
+                          styles.chipTextSelected,
+                      ]}
+                    >
+                      {outcome}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {editOutcome === 'Reschedule' && (
+                <>
+                  <Text style={styles.modalSectionLabel}>
+                    Reschedule Date (YYYY-MM-DD)
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.input}
+                    onPress={() => setShowReschedulePicker(true)}
+                  >
+                    <Text
+                      style={
+                        editRescheduleDate
+                          ? styles.inputText
+                          : styles.inputPlaceholder
+                      }
+                    >
+                      {editRescheduleDate || 'Tap to pick date'}
+                    </Text>
+                  </TouchableOpacity>
+                  {showReschedulePicker && (
+                    <DateTimePicker
+                      value={rescheduleDateObj || new Date()}
+                      mode="date"
+                      display={
+                        Platform.OS === 'ios' ? 'spinner' : 'default'
+                      }
+                      onChange={handleRescheduleDateChange}
+                    />
+                  )}
+                </>
+              )}
+
+              <Text style={styles.modalSectionLabel}>Visit Selfie</Text>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={pickVisitSelfie}
+              >
+                <Text style={styles.secondaryButtonText}>
+                  {visitSelfieAsset ? 'Retake selfie' : 'Click selfie'}
+                </Text>
+              </TouchableOpacity>
+              {visitSelfieAsset && (
+                <Text style={styles.helperText}>
+                  Selected: {visitSelfieAsset.fileName || 'image'}
+                </Text>
+              )}
+
+              {isKycVisitForModal && (
+                <>
+                  <Text style={styles.modalSectionLabel}>
+                    KYC Document Type
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    value={kycDocType}
+                    onChangeText={setKycDocType}
+                    placeholder="e.g. Aadhaar"
+                    placeholderTextColor={
+                      isDark ? '#6b7280' : '#9ca3af'
+                    }
+                  />
+                  <Text style={styles.modalSectionLabel}>
+                    KYC Document Number
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    value={kycDocNo}
+                    onChangeText={setKycDocNo}
+                    placeholder="1234 5678 9012"
+                    placeholderTextColor={
+                      isDark ? '#6b7280' : '#9ca3af'
+                    }
+                  />
+
+                  <Text style={styles.modalSectionLabel}>
+                    KYC Front Image
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
+                    onPress={pickKycFront}
+                  >
+                    <Text style={styles.secondaryButtonText}>
+                      {kycFrontAsset
+                        ? 'Retake front image'
+                        : 'Capture front'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <Text style={styles.modalSectionLabel}>
+                    KYC Back Image
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
+                    onPress={pickKycBack}
+                  >
+                    <Text style={styles.secondaryButtonText}>
+                      {kycBackAsset
+                        ? 'Retake back image'
+                        : 'Capture back'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              <View style={styles.modalButtonsRow}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={closeModal}
+                  disabled={savingVisit}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={handleSaveVisitDetails}
+                  disabled={savingVisit}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {savingVisit ? 'Saving…' : 'Save'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </Modal>
       )}
@@ -674,26 +852,13 @@ const createStyles = (isDark: boolean) =>
     header: {
       paddingHorizontal: 20,
       paddingTop: 24,
-      paddingBottom: 12,
+      paddingBottom: 8,
     },
     title: {
       fontSize: 22,
       fontWeight: '700',
       color: isDark ? '#f9fafb' : '#0f172a',
       marginBottom: 4,
-    },
-    subtitle: {
-      fontSize: 14,
-      color: isDark ? '#9ca3af' : '#4b5563',
-    },
-    agentLine: {
-      marginTop: 8,
-      fontSize: 13,
-      color: isDark ? '#e5e7eb' : '#374151',
-    },
-    agentName: {
-      fontWeight: '600',
-      color: BRAND_BLUE,
     },
     center: {
       flex: 1,
@@ -763,6 +928,12 @@ const createStyles = (isDark: boolean) =>
       fontSize: 12,
       color: isDark ? '#9ca3af' : '#6b7280',
     },
+    typeOfVisitText: {
+      marginTop: 4,
+      fontSize: 12,
+      color: isDark ? '#e5e7eb' : '#374151',
+      fontWeight: '500',
+    },
     metaRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -821,20 +992,60 @@ const createStyles = (isDark: boolean) =>
       backgroundColor: '#dcfce7',
       color: '#166534',
     },
-    // Modal styles
-    modalBackdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      justifyContent: 'flex-end',
+
+    // Filter styles
+    filterWrapper: {
+      paddingHorizontal: 12,
+      paddingBottom: 8,
     },
-    modalContainer: {
-      maxHeight: '85%',
+    filterScroll: {
+      paddingVertical: 4,
+    },
+    filterChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: isDark ? '#4b5563' : '#d1d5db',
+      marginRight: 8,
+      backgroundColor: isDark ? '#020617' : '#f9fafb',
+    },
+    filterChipActive: {
+      backgroundColor: BRAND_BLUE,
+      borderColor: BRAND_BLUE,
+    },
+    filterChipText: {
+      fontSize: 12,
+      color: isDark ? '#e5e7eb' : '#374151',
+    },
+    filterChipTextActive: {
+      color: '#ffffff',
+      fontWeight: '600',
+    },
+
+    // Full-screen modal styles
+    fullscreenModal: {
+      flex: 1,
       backgroundColor: isDark ? '#020617' : '#ffffff',
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
+      paddingTop: Platform.OS === 'android' ? 32 : 48,
       paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 20,
+      paddingBottom: 16,
+    },
+    modalTopBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    modalTopBarTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? '#e5e7eb' : '#111827',
+    },
+    modalCloseText: {
+      fontSize: 13,
+      color: BRAND_BLUE,
+      fontWeight: '600',
     },
     modalScroll: {
       paddingBottom: 12,
@@ -847,7 +1058,12 @@ const createStyles = (isDark: boolean) =>
     modalSubtitle: {
       fontSize: 13,
       color: isDark ? '#9ca3af' : '#6b7280',
-      marginBottom: 12,
+      marginBottom: 8,
+    },
+    modalTypeOfVisit: {
+      fontSize: 13,
+      color: isDark ? '#e5e7eb' : '#374151',
+      marginBottom: 8,
     },
     modalSectionLabel: {
       marginTop: 12,
