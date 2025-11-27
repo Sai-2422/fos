@@ -53,6 +53,7 @@ export interface FOSCollectionResponse {
 export interface CreateCollectionParams {
   fos_agent: string;
   customer: string;
+  case?: string;
   amount: string;
   mode: ModeType;
   upi_txn_id?: string;
@@ -113,7 +114,9 @@ export async function fetchLoggedInUserEmail(): Promise<string> {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Failed to get logged-in user: ${res.status} ${text || ''}`);
+    throw new Error(
+      `Failed to get logged-in user: ${res.status} ${text || ''}`,
+    );
   }
 
   const json = await res.json();
@@ -247,6 +250,7 @@ export async function createCollectionOnErp(
   const {
     fos_agent,
     customer,
+    case: caseId,
     amount,
     mode,
     upi_txn_id,
@@ -275,8 +279,9 @@ export async function createCollectionOnErp(
     const docPayload: FOSCollectionPayload = {
       fos_agent: fos_agent || fullName,
       customer,
+      case: caseId || undefined,
       collection_datetime: erpDatetime,
-      amount: parseFloat(amount),
+      amount: parseFloat(amount as any),
       mode,
       upi_txn_id: upi_txn_id || undefined,
       pg_ref_no: pg_ref_no || undefined,
@@ -396,11 +401,43 @@ export async function createCollectionOnErp(
   }
 }
 
-export async function fetchCollectionsForLoggedInUser(): Promise<
-  FOSCollectionResponse[]
-> {
+/**
+ * ✅ Fetch collections for the *agent* (FOS Agent), not by owner.
+ * This makes collections visible even if they were created by Admin,
+ * as long as `fos_agent` is set to this agent.
+ *
+ * Optional param `agentNameOverride` lets you pass the name from the app
+ * (e.g. HomeScreen fullName). If not provided, it derives from User document.
+ */
+export async function fetchCollectionsForLoggedInUser(
+  agentNameOverride?: string,
+): Promise<FOSCollectionResponse[]> {
   const userEmail = await fetchLoggedInUserEmail();
-  const filters = JSON.stringify([['owner', '=', userEmail]]);
+
+  let agentName = (agentNameOverride || '').trim();
+
+  // If app didn't pass agent name, derive from User doc
+  if (!agentName) {
+    try {
+      const fullName = await fetchUserFullName(userEmail);
+      agentName = (fullName || '').trim();
+    } catch (err) {
+      console.warn(
+        'Failed to fetch full name while loading collections, falling back to owner filter:',
+        err,
+      );
+    }
+  }
+
+  let filters: string;
+
+  if (agentName) {
+    // ✅ Primary filter: by fos_agent (matches FOS Agent name / full name)
+    filters = JSON.stringify([['fos_agent', '=', agentName]]);
+  } else {
+    // 🔁 Safety fallback: old behavior (by owner) if we couldn't resolve agentName
+    filters = JSON.stringify([['owner', '=', userEmail]]);
+  }
 
   let url = `${ERP_FOS_COLLECTION_URL}?filters=${encodeURIComponent(filters)}`;
   url += `&fields=["*"]&limit_page_length=999`;
@@ -457,12 +494,13 @@ export async function deleteCollection(name: string): Promise<void> {
   }
 }
 
-
 async function ensureCustomerExists(name: string): Promise<void> {
   const filters = JSON.stringify([['name', '=', name]]);
   const url =
     `${ERP_BASE_URL}/api/resource/Customer` +
-    `?fields=["name"]&filters=${encodeURIComponent(filters)}&limit_page_length=1`;
+    `?fields=["name"]&filters=${encodeURIComponent(
+      filters,
+    )}&limit_page_length=1`;
 
   const res = await fetch(url, {
     method: 'GET',

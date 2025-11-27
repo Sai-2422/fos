@@ -103,6 +103,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
   const goCollection = () => navigation.navigate('Collection');
   const goDeposit = () => navigation.navigate('Deposit');
 
+  // NEW: navigation for leaves & performance
+  const goLeaves = () => navigation.navigate('Leaves');
+  const goPerformance = () => navigation.navigate('Performance');
+
   const Tile: React.FC<TileProps> = ({
     title,
     subtitle,
@@ -110,15 +114,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
     iconName,
   }) => (
     <Pressable style={styles.tile} onPress={onPress}>
-      <View style={styles.tileIconCircle}>
-        <FontAwesome5
-          name={iconName}
-          size={18}
-          color={isDark ? '#e5e7eb' : '#0f172a'}
-        />
+      <View style={styles.tileHeaderRow}>
+        <View style={styles.tileIconCircle}>
+          <FontAwesome5
+            name={iconName}
+            size={18}
+            color={isDark ? '#e5e7eb' : '#0f172a'}
+          />
+        </View>
+
+        <View style={styles.tileTextWrapper}>
+          <Text style={styles.tileTitle}>{title}</Text>
+          {subtitle ? (
+            <Text style={styles.tileSubtitle}>{subtitle}</Text>
+          ) : null}
+        </View>
       </View>
-      <Text style={styles.tileTitle}>{title}</Text>
-      {subtitle ? <Text style={styles.tileSubtitle}>{subtitle}</Text> : null}
     </Pressable>
   );
 
@@ -154,10 +165,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
       const params = new URLSearchParams();
       params.append(
         'filters',
-        JSON.stringify([
-          ['user', '=', email],
-          ['attendance_date', '=', today],
-        ]),
+        JSON.stringify([['user', '=', email], ['attendance_date', '=', today]]),
       );
       params.append(
         'fields',
@@ -323,10 +331,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
           </View>
         </View>
 
-        <Text style={styles.helperText}>
-          This is your FOS home screen. Use the tiles above to open cases,
-          record collections and deposits.
-        </Text>
+        {/* Leave & Performance section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Leave &amp; Performance</Text>
+          <View style={styles.tileRow}>
+            <Tile
+              title="My Leaves"
+              onPress={goLeaves}
+              iconName="calendar-alt"
+            />
+            <Tile
+              title="My Performance"
+              onPress={goPerformance}
+              iconName="chart-line"
+            />
+          </View>
+        </View>
 
         {/* Attendance UI – show button only when NOT loading and NOT already marked */}
         {!loadingAttendance && !attendanceMarkedToday && (
@@ -471,7 +491,7 @@ const createStyles = (isDark: boolean) =>
     },
 
     section: {
-      marginTop: 14,
+      marginTop: 12,
     },
     sectionTitle: {
       fontSize: 16,
@@ -494,7 +514,13 @@ const createStyles = (isDark: boolean) =>
       shadowOffset: { width: 0, height: 4 },
       shadowRadius: 10,
       elevation: 3,
-      minHeight: 110,
+      minHeight: 75,
+      justifyContent: 'center', // center content vertically inside card
+    },
+    tileHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center', // center icon+text row horizontally
     },
     tileIconCircle: {
       width: 34,
@@ -503,24 +529,21 @@ const createStyles = (isDark: boolean) =>
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: isDark ? '#111827' : '#bfdbfe',
-      marginBottom: 8,
+    },
+    tileTextWrapper: {
+      flex: 1,
+      marginLeft: 10,
     },
     tileTitle: {
       fontSize: 14,
       fontWeight: '700',
       color: isDark ? '#e5e7eb' : '#111827',
-      marginBottom: 4,
+      marginBottom: 2,
     },
     tileSubtitle: {
       fontSize: 12,
       color: isDark ? '#9ca3af' : '#6b7280',
     },
-    helperText: {
-      fontSize: 12,
-      color: isDark ? '#9ca3af' : '#6b7280',
-      marginTop: 8,
-    },
-
     attendanceButton: {
       marginTop: 20,
       borderRadius: 9999,

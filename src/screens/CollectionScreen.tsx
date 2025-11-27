@@ -24,6 +24,7 @@ import {
 import DateTimePicker, {
   DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
+import { useRoute } from '@react-navigation/native';
 
 import {
   createCollectionOnErp,
@@ -47,6 +48,7 @@ const ACCENT = '#397e8a';
 type FOSCollectionForm = {
   fos_agent: string;
   customer: string;
+  case?: string;
   collection_datetime: string;
   amount: string;
   mode: ModeType;
@@ -67,22 +69,38 @@ type CollectionScreenProps = {
   fullName?: string; // logged-in agent name passed from HomeStackNavigator
 } & any;
 
-// ─────────────────────────────────────────────
-// Day Plan helpers (NO hooks here)
-// ─────────────────────────────────────────────
 type CustomerGroup = {
   customer: string;
   items: DayPlanItem[];
 };
 
+// 👇 param sent from MyListScreen when tapping "Create Collection"
+type FromCaseParam = {
+  customer?: string;
+  caseId?: string;
+  agent?: string;
+};
+
+// ─────────────────────────────────────────────
+// Day Plan helpers (NO hooks here)
+// ─────────────────────────────────────────────
+
 const groupDayPlanItemsByCustomer = (items: DayPlanItem[]): CustomerGroup[] => {
   const map: Record<string, DayPlanItem[]> = {};
 
   items.forEach(item => {
-    if (!map[item.customer]) {
-      map[item.customer] = [];
+    // 🔹 Try both `customer` and `fos_customer` just in case
+    const rawName =
+      (item.customer as string | undefined) ||
+      ((item as any).fos_customer as string | undefined) ||
+      '';
+    const key = rawName.trim();
+    if (!key) return;
+
+    if (!map[key]) {
+      map[key] = [];
     }
-    map[item.customer].push(item);
+    map[key].push(item);
   });
 
   return Object.entries(map).map(([customer, groupItems]) => ({
@@ -158,6 +176,9 @@ const isSameCalendarDate = (a: Date, b: Date) =>
 
 const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
   // 🔹 ALL hooks are here at the top, no conditions
+  const route = useRoute<any>();
+  const fromCase = (route.params as any)?.fromCase as FromCaseParam | undefined;
+
   const { width } = useWindowDimensions();
   const isSmall = width < 380;
 
@@ -166,6 +187,7 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
   const [formData, setFormData] = useState<FOSCollectionForm>({
     fos_agent: fullName || '',
     customer: '',
+    case: '',
     collection_datetime: formatDateForDisplay(todayDate), // ✅ default = today
     amount: '',
     mode: 'UPI',
@@ -202,6 +224,10 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
   const [isCaseDropdownOpen, setIsCaseDropdownOpen] = useState(false);
 
+  // 👇 NEW: internal flags so we prefill from case only once
+  const [prefilledFromCase, setPrefilledFromCase] = useState(false);
+  const [prefilledCaseSelection, setPrefilledCaseSelection] = useState(false);
+
   useEffect(() => {
     initializeScreen();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -210,6 +236,82 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
   // Group items by customer (pure function)
   const customersFromPlan: CustomerGroup[] =
     groupDayPlanItemsByCustomer(dayPlanItems);
+
+  // 🔹 All Day Plan cases for the currently selected customer (if any)
+  const casesForSelectedCustomer = selectedCustomer
+    ? customersFromPlan.find(
+        g =>
+          g.customer &&
+          g.customer.trim().toLowerCase() ===
+            selectedCustomer.trim().toLowerCase(),
+      )?.items ?? []
+    : [];
+
+  // 👇 Prefill form when opened from "Create Collection" button on MyList
+  useEffect(() => {
+    if (!fromCase || prefilledFromCase) return;
+
+    setIsAdding(true);
+
+    if (fromCase.customer) {
+      setSelectedCustomer(fromCase.customer);
+      setFormData(prev => ({
+        ...prev,
+        customer: prev.customer || fromCase.customer || '',
+      }));
+    }
+
+    if (fromCase.agent) {
+      setFormData(prev => ({
+        ...prev,
+        fos_agent: prev.fos_agent || fromCase.agent || '',
+      }));
+    }
+
+    if (fromCase.caseId) {
+      setFormData(prev => ({
+        ...prev,
+        case: prev.case || fromCase.caseId || '',
+      }));
+    }
+
+    setPrefilledFromCase(true);
+  }, [fromCase, prefilledFromCase]);
+
+  // 👇 Once Day Plan is loaded, try to auto-select matching Case
+  useEffect(() => {
+    if (!fromCase || !fromCase.caseId) return;
+    if (!selectedCustomer) return;
+    if (prefilledCaseSelection) return;
+
+    const normalize = (s?: string | null) => (s || '').trim().toLowerCase();
+
+    const groups = groupDayPlanItemsByCustomer(dayPlanItems);
+    const targetCustomer = normalize(fromCase.customer || selectedCustomer);
+
+    const group = groups.find(g => normalize(g.customer) === targetCustomer);
+    if (!group) return;
+
+    const match =
+      group.items.find(item => {
+        const caseId =
+          (item as any).case || (item as any).case_id || (item as any).name;
+        return caseId === fromCase.caseId;
+      }) || null;
+
+    if (match) {
+      setSelectedCase(match);
+      // ✅ also sync to formData.case so save uses this
+      setFormData(prev => ({
+        ...prev,
+        case: ((match as any).case ||
+          (match as any).case_id ||
+          (match as any).name ||
+          '') as any,
+      }));
+      setPrefilledCaseSelection(true);
+    }
+  }, [fromCase, selectedCustomer, dayPlanItems, prefilledCaseSelection]);
 
   // ─────────────────────────────────────────────
 
@@ -279,6 +381,7 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
     setFormData({
       fos_agent: fullName || loggedInUser || '',
       customer: '',
+      case: '',
       collection_datetime: formatDateForDisplay(newToday), // ✅ reset to today
       amount: '',
       mode: 'UPI',
@@ -350,6 +453,7 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
       const result = await createCollectionOnErp({
         fos_agent: fosAgent,
         customer,
+        case: formData.case,
         amount: amountNumber,
         mode: formData.mode,
         upi_txn_id: formData.upi_txn_id.trim(),
@@ -450,7 +554,7 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
     handleChange('collection_datetime', display);
   };
 
-  // 👇 NEW: selection handlers for dropdowns
+  // 👇 selection handlers for dropdowns
   const handleSelectCustomerFromPlan = (customer: string) => {
     setSelectedCustomer(customer);
     setIsCustomerDropdownOpen(false);
@@ -458,18 +562,24 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
 
     const group = customersFromPlan.find(g => g.customer === customer);
     if (group && group.items.length === 1) {
-      setSelectedCase(group.items[0]);
+      const onlyItem = group.items[0];
+      setSelectedCase(onlyItem);
       setIsCaseDropdownOpen(false);
+      handleChange('case', (onlyItem.case || '') as any);
     } else {
       setSelectedCase(null);
+      handleChange('case', '' as any);
     }
   };
 
   const handleSelectCase = (item: DayPlanItem) => {
     setSelectedCase(item);
     setIsCaseDropdownOpen(false);
-    // if later you add "case" field to FOS Collection,
-    // set it here in formData.
+
+    const caseId =
+      (item as any).case || (item as any).case_id || (item as any).name || '';
+
+    handleChange('case', caseId as any);
   };
 
   // ─────────────────────────────────────────────
@@ -516,17 +626,6 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
         <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
       }
     >
-      {/* Top header */}
-      {/* <View style={styles.topHeader}>
-        <Text style={styles.topHeaderBack}>{'←  Collection'}</Text>
-        {(fullName || loggedInUser) && (
-          <Text style={styles.userBadge}>
-            <Feather name="user" size={12} color={ACCENT} />{' '}
-            {fullName || loggedInUser}
-          </Text>
-        )}
-      </View> */}
-
       {/* Summary card */}
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
@@ -680,7 +779,7 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
                         onPress={() => setIsCaseDropdownOpen(prev => !prev)}
                       >
                         <Text style={styles.dropdownValue}>
-                          {selectedCase?.case || 'Select case'}
+                          {selectedCase?.case || formData.case || 'Select case'}
                         </Text>
                         <Feather
                           name={
@@ -693,19 +792,28 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
 
                       {isCaseDropdownOpen && (
                         <View style={styles.dropdownList}>
-                          {customersFromPlan
-                            .find(g => g.customer === selectedCustomer)
-                            ?.items.map(item => (
+                          {casesForSelectedCustomer.length > 0 ? (
+                            casesForSelectedCustomer.map(item => (
                               <TouchableOpacity
                                 key={item.name}
                                 style={styles.dropdownItem}
                                 onPress={() => handleSelectCase(item)}
                               >
                                 <Text style={styles.dropdownItemText}>
-                                  {item.case}
+                                  {item.case ||
+                                    (item as any).case_id ||
+                                    item.name}
                                 </Text>
                               </TouchableOpacity>
-                            ))}
+                            ))
+                          ) : (
+                            <View style={styles.dropdownItem}>
+                              <Text style={styles.dropdownItemText}>
+                                No cases from today&apos;s Day Plan for this
+                                customer.
+                              </Text>
+                            </View>
+                          )}
                         </View>
                       )}
                     </>
@@ -720,11 +828,11 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
                         </Text>
                       </View>
 
-                      {selectedCase && (
+                      {(selectedCase || formData.case) && (
                         <View style={styles.selectionTag}>
                           <Text style={styles.selectionTagLabel}>Case</Text>
                           <Text style={styles.selectionTagValue}>
-                            {selectedCase.case}
+                            {selectedCase?.case || formData.case}
                           </Text>
                         </View>
                       )}

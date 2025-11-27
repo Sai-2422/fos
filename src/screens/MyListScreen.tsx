@@ -17,7 +17,7 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useNavigation } from '@react-navigation/native';
 import DateTimePicker, {
   DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
@@ -29,11 +29,7 @@ import {
   uploadCaseSelfie,
   createKycDocumentWithImages,
 } from '../services/myCasesService';
-import {
-  Asset,
-  CameraOptions,
-  launchCamera,
-} from 'react-native-image-picker';
+import { Asset, CameraOptions, launchCamera } from 'react-native-image-picker';
 
 const BRAND_BLUE = '#397E8A';
 
@@ -126,10 +122,7 @@ function resolveCaseType(c: AgentCase | null): string {
   if (!c) return '';
   const asAny = c as any;
   const raw =
-    asAny.typeOfVisit ||
-    asAny.productType ||
-    asAny.product_type ||
-    '';
+    asAny.typeOfVisit || asAny.productType || asAny.product_type || '';
   return typeof raw === 'string' ? raw : '';
 }
 
@@ -139,6 +132,8 @@ function resolveCaseType(c: AgentCase | null): string {
 
 const MyListScreen: React.FC = () => {
   const route = useRoute<any>();
+  const navigation = useNavigation<any>(); // 👈 for navigating to Collection screen
+
   // We expect HomeScreen to do: navigation.navigate('MyList', { agentName })
   const agentName = route.params?.agentName as string | undefined;
 
@@ -152,8 +147,7 @@ const MyListScreen: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null);
 
   // Filter state
-  const [activeFilter, setActiveFilter] =
-    React.useState<DateFilterKey>('ALL');
+  const [activeFilter, setActiveFilter] = React.useState<DateFilterKey>('ALL');
 
   // Modal state
   const [selectedCase, setSelectedCase] = React.useState<AgentCase | null>(
@@ -167,19 +161,19 @@ const MyListScreen: React.FC = () => {
     React.useState<boolean>(false);
   const [editRescheduleDate, setEditRescheduleDate] =
     React.useState<string>('');
-  const [rescheduleDateObj, setRescheduleDateObj] =
-    React.useState<Date | null>(null);
+  const [rescheduleDateObj, setRescheduleDateObj] = React.useState<Date | null>(
+    null,
+  );
   const [showReschedulePicker, setShowReschedulePicker] =
     React.useState<boolean>(false);
 
-  const [visitSelfieAsset, setVisitSelfieAsset] =
-    React.useState<Asset | null>(null);
+  const [visitSelfieAsset, setVisitSelfieAsset] = React.useState<Asset | null>(
+    null,
+  );
   const [kycDocType, setKycDocType] = React.useState<string>('');
   const [kycDocNo, setKycDocNo] = React.useState<string>('');
-  const [kycFrontAsset, setKycFrontAsset] =
-    React.useState<Asset | null>(null);
-  const [kycBackAsset, setKycBackAsset] =
-    React.useState<Asset | null>(null);
+  const [kycFrontAsset, setKycFrontAsset] = React.useState<Asset | null>(null);
+  const [kycBackAsset, setKycBackAsset] = React.useState<Asset | null>(null);
   const [savingVisit, setSavingVisit] = React.useState<boolean>(false);
 
   const loadCases = React.useCallback(async () => {
@@ -406,6 +400,25 @@ const MyListScreen: React.FC = () => {
     }
   };
 
+  // 👉 Navigate to Collection screen when "Create Collection" is pressed
+  const handleCreateCollection = () => {
+    if (!selectedCase) return;
+
+    const caseType = resolveCaseType(selectedCase);
+    const normCaseType = caseType ? caseType.trim().toUpperCase() : '';
+    if (normCaseType !== 'PAYMENT') return;
+
+    navigation.navigate('Collection', {
+      fromCase: {
+        customer: selectedCase.customer,
+        caseId: selectedCase.caseId,
+        agent: selectedCase.agent,
+      },
+    });
+
+    closeModal();
+  };
+
   const filteredCases = React.useMemo(() => {
     if (activeFilter === 'ALL') return cases;
 
@@ -422,11 +435,7 @@ const MyListScreen: React.FC = () => {
       today.getMonth() - 1,
       1,
     );
-    const lastMonthEnd = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      0,
-    );
+    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
 
     return cases.filter(item => {
       const visitStr = (item.visitDate as string) || '';
@@ -505,9 +514,7 @@ const MyListScreen: React.FC = () => {
         </View>
 
         <View style={styles.metaRow}>
-          <Text style={styles.metaText}>
-            Overdue: ₹ {item.overdueAmount}
-          </Text>
+          <Text style={styles.metaText}>Overdue: ₹ {item.overdueAmount}</Text>
           <Text style={styles.metaText}>DPD: {item.dpd}</Text>
         </View>
 
@@ -520,9 +527,7 @@ const MyListScreen: React.FC = () => {
         <View style={styles.footerRow}>
           <Text style={styles.metaText}>Agent: {item.agent || '-'}</Text>
           {item.outcomeType ? (
-            <Text style={styles.metaText}>
-              Outcome: {item.outcomeType}
-            </Text>
+            <Text style={styles.metaText}>Outcome: {item.outcomeType}</Text>
           ) : null}
         </View>
       </TouchableOpacity>
@@ -534,6 +539,8 @@ const MyListScreen: React.FC = () => {
   const caseTypeForModal = resolveCaseType(selectedCase);
   const isKycVisitForModal =
     (caseTypeForModal || '').trim().toUpperCase() === 'KYC';
+  const isPaymentVisitForModal =
+    (caseTypeForModal || '').trim().toUpperCase() === 'PAYMENT';
 
   const hasAnyCases = cases.length > 0;
 
@@ -616,19 +623,33 @@ const MyListScreen: React.FC = () => {
           <View style={styles.fullscreenModal}>
             <View style={styles.modalTopBar}>
               <Text style={styles.modalTopBarTitle}>Visit Details</Text>
-              <TouchableOpacity
-                onPress={closeModal}
-                disabled={savingVisit}
-              >
+              <TouchableOpacity onPress={closeModal} disabled={savingVisit}>
                 <Text style={styles.modalCloseText}>Close</Text>
               </TouchableOpacity>
             </View>
 
             <ScrollView contentContainerStyle={styles.modalScroll}>
-              <Text style={styles.modalTitle}>{selectedCase.customer}</Text>
-              <Text style={styles.modalSubtitle}>
-                {selectedCase.caseId}
-              </Text>
+              {/* Top row: customer + case + Create Collection (for Payment) */}
+              <View style={styles.modalHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>{selectedCase.customer}</Text>
+                  <Text style={styles.modalSubtitle}>
+                    {selectedCase.caseId}
+                  </Text>
+                </View>
+
+                {isPaymentVisitForModal && (
+                  <TouchableOpacity
+                    style={styles.createCollectionButton}
+                    onPress={handleCreateCollection}
+                    disabled={savingVisit}
+                  >
+                    <Text style={styles.createCollectionButtonText}>
+                      Create Collection
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
 
               {caseTypeForModal ? (
                 <Text style={styles.modalTypeOfVisit}>
@@ -645,9 +666,7 @@ const MyListScreen: React.FC = () => {
               >
                 <Text
                   style={
-                    editVisitDate
-                      ? styles.inputText
-                      : styles.inputPlaceholder
+                    editVisitDate ? styles.inputText : styles.inputPlaceholder
                   }
                 >
                   {editVisitDate || 'Tap to pick date'}
@@ -657,9 +676,7 @@ const MyListScreen: React.FC = () => {
                 <DateTimePicker
                   value={visitDateObj || new Date()}
                   mode="date"
-                  display={
-                    Platform.OS === 'ios' ? 'spinner' : 'default'
-                  }
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                   onChange={handleVisitDateChange}
                 />
               )}
@@ -678,8 +695,7 @@ const MyListScreen: React.FC = () => {
                     <Text
                       style={[
                         styles.chipText,
-                        editStatus === status &&
-                          styles.chipTextSelected,
+                        editStatus === status && styles.chipTextSelected,
                       ]}
                     >
                       {status}
@@ -702,8 +718,7 @@ const MyListScreen: React.FC = () => {
                     <Text
                       style={[
                         styles.chipText,
-                        editOutcome === outcome &&
-                          styles.chipTextSelected,
+                        editOutcome === outcome && styles.chipTextSelected,
                       ]}
                     >
                       {outcome}
@@ -735,9 +750,7 @@ const MyListScreen: React.FC = () => {
                     <DateTimePicker
                       value={rescheduleDateObj || new Date()}
                       mode="date"
-                      display={
-                        Platform.OS === 'ios' ? 'spinner' : 'default'
-                      }
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                       onChange={handleRescheduleDateChange}
                     />
                   )}
@@ -769,9 +782,7 @@ const MyListScreen: React.FC = () => {
                     value={kycDocType}
                     onChangeText={setKycDocType}
                     placeholder="e.g. Aadhaar"
-                    placeholderTextColor={
-                      isDark ? '#6b7280' : '#9ca3af'
-                    }
+                    placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
                   />
                   <Text style={styles.modalSectionLabel}>
                     KYC Document Number
@@ -781,36 +792,26 @@ const MyListScreen: React.FC = () => {
                     value={kycDocNo}
                     onChangeText={setKycDocNo}
                     placeholder="1234 5678 9012"
-                    placeholderTextColor={
-                      isDark ? '#6b7280' : '#9ca3af'
-                    }
+                    placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
                   />
 
-                  <Text style={styles.modalSectionLabel}>
-                    KYC Front Image
-                  </Text>
+                  <Text style={styles.modalSectionLabel}>KYC Front Image</Text>
                   <TouchableOpacity
                     style={styles.secondaryButton}
                     onPress={pickKycFront}
                   >
                     <Text style={styles.secondaryButtonText}>
-                      {kycFrontAsset
-                        ? 'Retake front image'
-                        : 'Capture front'}
+                      {kycFrontAsset ? 'Retake front image' : 'Capture front'}
                     </Text>
                   </TouchableOpacity>
 
-                  <Text style={styles.modalSectionLabel}>
-                    KYC Back Image
-                  </Text>
+                  <Text style={styles.modalSectionLabel}>KYC Back Image</Text>
                   <TouchableOpacity
                     style={styles.secondaryButton}
                     onPress={pickKycBack}
                   >
                     <Text style={styles.secondaryButtonText}>
-                      {kycBackAsset
-                        ? 'Retake back image'
-                        : 'Capture back'}
+                      {kycBackAsset ? 'Retake back image' : 'Capture back'}
                     </Text>
                   </TouchableOpacity>
                 </>
@@ -1050,6 +1051,12 @@ const createStyles = (isDark: boolean) =>
     modalScroll: {
       paddingBottom: 12,
     },
+    modalHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 4,
+    },
     modalTitle: {
       fontSize: 18,
       fontWeight: '700',
@@ -1058,7 +1065,7 @@ const createStyles = (isDark: boolean) =>
     modalSubtitle: {
       fontSize: 13,
       color: isDark ? '#9ca3af' : '#6b7280',
-      marginBottom: 8,
+      marginBottom: 2,
     },
     modalTypeOfVisit: {
       fontSize: 13,
@@ -1157,6 +1164,18 @@ const createStyles = (isDark: boolean) =>
     },
     primaryButtonText: {
       fontSize: 13,
+      fontWeight: '600',
+      color: '#ffffff',
+    },
+    createCollectionButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: BRAND_BLUE,
+      marginLeft: 8,
+    },
+    createCollectionButtonText: {
+      fontSize: 12,
       fontWeight: '600',
       color: '#ffffff',
     },
