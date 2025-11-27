@@ -122,7 +122,7 @@ export async function fetchCasesForAgent(
       'agent',
       'status',
       'overdue_amt',
-      'pending_amount',   // ✅ NEW – to show Pending Amount
+      'pending_amount', // ✅ NEW – to show Pending Amount
       'dpd',
       'current_address',
       'priority',

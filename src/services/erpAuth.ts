@@ -41,9 +41,9 @@ export async function loginWithPassword(
   }
 
   try {
-    const body = `usr=${encodeURIComponent(
-      username,
-    )}&pwd=${encodeURIComponent(password)}`;
+    const body = `usr=${encodeURIComponent(username)}&pwd=${encodeURIComponent(
+      password,
+    )}`;
 
     const response = await fetch(loginUrl, {
       method: 'POST',

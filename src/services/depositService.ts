@@ -105,7 +105,9 @@ async function fetchLoggedInUserEmail(): Promise<string> {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Failed to get logged-in user: ${res.status} ${text || ''}`);
+    throw new Error(
+      `Failed to get logged-in user: ${res.status} ${text || ''}`,
+    );
   }
 
   const json = await res.json();
@@ -119,7 +121,9 @@ async function fetchLoggedInUserEmail(): Promise<string> {
 }
 
 async function fetchUserFullName(userEmail: string): Promise<string> {
-  const url = `${ERP_BASE_URL}/api/resource/User/${encodeURIComponent(userEmail)}`;
+  const url = `${ERP_BASE_URL}/api/resource/User/${encodeURIComponent(
+    userEmail,
+  )}`;
 
   const res = await fetch(url, {
     method: 'GET',
@@ -183,7 +187,9 @@ async function deleteDepositDoc(name: string): Promise<void> {
 // src/services/depositService.ts
 
 // ✅ Show only logged-in user's collections with is_deposited = 0
-export async function fetchUndepositedCollections(): Promise<FOSCollectionResponse[]> {
+export async function fetchUndepositedCollections(): Promise<
+  FOSCollectionResponse[]
+> {
   try {
     console.log('📡 Fetching undeposited collections for logged-in user...');
 
@@ -198,10 +204,11 @@ export async function fetchUndepositedCollections(): Promise<FOSCollectionRespon
     const filters = JSON.stringify([
       ['owner', '=', userEmail],
       ['is_deposited', '=', 0],
-     
     ]);
 
-    let url = `${ERP_FOS_COLLECTION_URL}?filters=${encodeURIComponent(filters)}`;
+    let url = `${ERP_FOS_COLLECTION_URL}?filters=${encodeURIComponent(
+      filters,
+    )}`;
     url +=
       '&fields=["name","customer","fos_agent","amount","mode","bank_name","is_deposited","creation","collection_datetime","receipt_image"]';
     url += '&limit_page_length=999&order_by=creation desc';
@@ -219,13 +226,18 @@ export async function fetchUndepositedCollections(): Promise<FOSCollectionRespon
     if (!res.ok) {
       const text = await res.text();
       console.error('❌ Fetch undeposited collections error:', text);
-      throw new Error(`Failed to fetch collections: ${res.status} ${text || ''}`);
+      throw new Error(
+        `Failed to fetch collections: ${res.status} ${text || ''}`,
+      );
     }
 
     const json = await res.json();
     const rows: FOSCollectionResponse[] = json?.data || [];
 
-    console.log('✅ Found undeposited collections for this login:', rows.length);
+    console.log(
+      '✅ Found undeposited collections for this login:',
+      rows.length,
+    );
     return rows;
   } catch (error) {
     console.error('❌ Error fetching undeposited collections:', error);
@@ -244,7 +256,6 @@ export async function fetchLoggedInAgentName(): Promise<string> {
   // fallback to email if full_name is missing
   return fullName || email;
 }
-
 
 /**
  * Create a new FOS Cash Deposit
@@ -294,7 +305,7 @@ export async function createCashDeposit(
       normalizedDepositDate = `${y}-${m}-${d}`; // YYYY-MM-DD
     } else {
       throw new Error(
-        "Invalid Deposit Date. Please use format YYYY-MM-DD (e.g. 2025-11-24).",
+        'Invalid Deposit Date. Please use format YYYY-MM-DD (e.g. 2025-11-24).',
       );
     }
 
@@ -343,7 +354,9 @@ export async function createCashDeposit(
     if (!createRes.ok) {
       const text = await createRes.text();
       console.error('❌ Create deposit failed:', createRes.status, text);
-      throw new Error(`Failed to create deposit: ${createRes.status} ${text || ''}`);
+      throw new Error(
+        `Failed to create deposit: ${createRes.status} ${text || ''}`,
+      );
     }
 
     const createdJson = await createRes.json();

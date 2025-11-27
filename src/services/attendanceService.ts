@@ -208,9 +208,7 @@ async function uploadSelfieFile(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(
-      `Failed to upload selfie: ${res.status} ${text || ''}`,
-    );
+    throw new Error(`Failed to upload selfie: ${res.status} ${text || ''}`);
   }
 
   const json = await res.json();
@@ -401,10 +399,7 @@ export async function fetchAttendanceHistoryForLoggedInUser(
   const userEmail = await fetchLoggedInUserEmail();
 
   const params = new URLSearchParams();
-  params.append(
-    'filters',
-    JSON.stringify([['user', '=', userEmail]]),
-  );
+  params.append('filters', JSON.stringify([['user', '=', userEmail]]));
   params.append(
     'fields',
     JSON.stringify(['name', 'attendance_date', 'status', 'attendance_type']),
