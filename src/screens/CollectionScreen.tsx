@@ -16,11 +16,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
-import {
-  Asset,
-  CameraOptions,
-  launchCamera,
-} from 'react-native-image-picker';
+import { Asset, CameraOptions, launchCamera } from 'react-native-image-picker';
 import DateTimePicker, {
   DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';

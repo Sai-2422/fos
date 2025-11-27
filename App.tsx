@@ -33,6 +33,8 @@ import PriorityBucketScreen from './src/screens/PriorityBucketScreen';
 import MyListScreen from './src/screens/MyListScreen';
 import CollectionScreen from './src/screens/CollectionScreen';
 import DepositScreen from './src/screens/DepositScreen';
+import LeavesScreen from './src/screens/LeavesScreen';
+import PerformanceScreen from './src/screens/PerformanceScreen';
 import {
   COMPANY_NAME,
   APP_DISPLAY_NAME,
@@ -147,9 +149,7 @@ function HomeStackNavigator(props: { fullName?: string }) {
   return (
     <HomeStack.Navigator>
       <HomeStack.Screen name="Home" options={{ headerShown: false }}>
-        {(screenProps) => (
-          <HomeScreen {...screenProps} fullName={fullName} />
-        )}
+        {screenProps => <HomeScreen {...screenProps} fullName={fullName} />}
       </HomeStack.Screen>
 
       <HomeStack.Screen
@@ -166,17 +166,28 @@ function HomeStackNavigator(props: { fullName?: string }) {
 
       {/* ✅ pass fullName to CollectionScreen */}
       <HomeStack.Screen name="Collection" options={{ title: 'Collection' }}>
-        {(screenProps) => (
+        {screenProps => (
           <CollectionScreen {...screenProps} fullName={fullName} />
         )}
       </HomeStack.Screen>
 
       {/* ✅ pass fullName to DepositScreen */}
       <HomeStack.Screen name="Deposit" options={{ title: 'Deposit' }}>
-        {(screenProps) => (
-          <DepositScreen {...screenProps} fullName={fullName} />
-        )}
+        {screenProps => <DepositScreen {...screenProps} fullName={fullName} />}
       </HomeStack.Screen>
+      {/* 🔹 NEW: Leaves */}
+      <HomeStack.Screen
+        name="Leaves"
+        component={LeavesScreen}
+        options={{ title: 'My Leaves' }}
+      />
+
+      {/* 🔹 NEW: Performance */}
+      <HomeStack.Screen
+        name="Performance"
+        component={PerformanceScreen}
+        options={{ title: 'My Performance' }}
+      />
     </HomeStack.Navigator>
   );
 }
@@ -258,7 +269,7 @@ function App(): JSX.Element {
       <NavigationContainer>
         {isLoggedIn ? (
           <Drawer.Navigator
-            drawerContent={(props) => (
+            drawerContent={props => (
               <CustomDrawerContent {...props} onLogout={handleLogout} />
             )}
             screenOptions={{
@@ -298,7 +309,7 @@ function App(): JSX.Element {
         ) : (
           <AuthStack.Navigator>
             <AuthStack.Screen name="Login" options={{ headerShown: false }}>
-              {(props) => (
+              {props => (
                 <LoginScreen {...props} onLoginSuccess={handleLoginSuccess} />
               )}
             </AuthStack.Screen>

@@ -19,7 +19,7 @@ import { loginWithPassword, LoginResult } from '../services/erpAuth';
 
 // --- Color Constants based on your request ---
 const COLORS = {
-  primary: '#397e8a',    // Teal/Cyan
+  primary: '#397e8a', // Teal/Cyan
   background: '#152e47', // Dark Navy
   white: '#ffffff',
   surface: '#ffffff',
@@ -76,7 +76,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   return (
     <View style={styles.mainContainer}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-      
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -90,9 +90,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           {/* Header Section (Dark Navy Background) */}
           <View style={styles.headerSection}>
             <Text style={styles.appName}>{APP_DISPLAY_NAME}</Text>
-            <Text style={styles.appSubtitle}>
-              Welcome to {COMPANY_NAME}
-            </Text>
+            <Text style={styles.appSubtitle}>Welcome to {COMPANY_NAME}</Text>
           </View>
 
           {/* Bottom Section (Card) */}
@@ -102,7 +100,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 <Text style={styles.cardTitle}>Sign In</Text>
                 <View style={styles.titleUnderline} />
               </View>
-              
+
               <Text style={styles.cardSubtitle}>
                 Please enter your credentials to proceed.
               </Text>
@@ -156,16 +154,24 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               {/* Status box */}
               {status && (
                 <View style={[styles.statusBox, statusColorStyle]}>
-                  <Text style={[
-                    styles.statusTitle, 
-                    status.ok ? { color: COLORS.textMain } : { color: '#7f1d1d' }
-                  ]}>
+                  <Text
+                    style={[
+                      styles.statusTitle,
+                      status.ok
+                        ? { color: COLORS.textMain }
+                        : { color: '#7f1d1d' },
+                    ]}
+                  >
                     {status.ok ? 'Login Success' : 'Access Denied'}
                   </Text>
-                  <Text style={[
-                    styles.statusLine, 
-                    status.ok ? { color: COLORS.textSub } : { color: '#991b1b' }
-                  ]}>
+                  <Text
+                    style={[
+                      styles.statusLine,
+                      status.ok
+                        ? { color: COLORS.textSub }
+                        : { color: '#991b1b' },
+                    ]}
+                  >
                     {status.message}
                   </Text>
                 </View>

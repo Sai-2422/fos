@@ -165,7 +165,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ fullName }) => {
       const params = new URLSearchParams();
       params.append(
         'filters',
-        JSON.stringify([['user', '=', email], ['attendance_date', '=', today]]),
+        JSON.stringify([
+          ['user', '=', email],
+          ['attendance_date', '=', today],
+        ]),
       );
       params.append(
         'fields',
