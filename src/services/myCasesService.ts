@@ -41,6 +41,7 @@ export type AgentCase = {
   agent: string; // agent
   status: string; // status
   overdueAmount: number; // overdue_amt
+  pendingAmount: number; // pending_amount  ✅ NEW
   dpd: number; // dpd
   address: string; // current_address
 
@@ -121,10 +122,11 @@ export async function fetchCasesForAgent(
       'agent',
       'status',
       'overdue_amt',
+      'pending_amount',   // ✅ NEW – to show Pending Amount
       'dpd',
       'current_address',
       'priority',
-      'product_type',      // ⬅️ Type of Visit (Payment / KYC)
+      'product_type', // ⬅️ Type of Visit (Payment / KYC)
       'visit_date',
       'outcome_type',
       'reschedule_date',
@@ -163,10 +165,14 @@ export async function fetchCasesForAgent(
       typeof row.overdue_amt === 'number'
         ? row.overdue_amt
         : Number(row.overdue_amt || 0),
-    dpd:
-      typeof row.dpd === 'number'
-        ? row.dpd
-        : Number(row.dpd || 0),
+
+    // ✅ Map ERP pending_amount → pendingAmount
+    pendingAmount:
+      typeof row.pending_amount === 'number'
+        ? row.pending_amount
+        : Number(row.pending_amount || 0),
+
+    dpd: typeof row.dpd === 'number' ? row.dpd : Number(row.dpd || 0),
     address: row.current_address || '',
     priority: row.priority || null,
 

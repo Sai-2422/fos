@@ -18,8 +18,8 @@ import {
 import Feather from 'react-native-vector-icons/Feather';
 import {
   Asset,
-  ImageLibraryOptions,
-  launchImageLibrary,
+  CameraOptions,
+  launchCamera,
 } from 'react-native-image-picker';
 import DateTimePicker, {
   DateTimePickerEvent,
@@ -524,11 +524,14 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
   };
 
   const handlePickReceipt = async () => {
-    const options: ImageLibraryOptions = {
+    // 📸 Use camera instead of gallery
+    const options: CameraOptions = {
       mediaType: 'photo',
-      selectionLimit: 1,
+      saveToPhotos: false,
     };
-    const result = await launchImageLibrary(options);
+
+    const result = await launchCamera(options);
+
     if (result.didCancel) return;
 
     const asset: Asset | undefined = result.assets && result.assets[0];
@@ -682,34 +685,6 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
               <View>
                 <Text style={styles.title}>New FOS Collection</Text>
                 <Text style={styles.notSaved}>Not Saved</Text>
-              </View>
-
-              <View style={styles.headerButtons}>
-                <TouchableOpacity
-                  style={styles.secondaryBtn}
-                  onPress={() => {
-                    clearForm();
-                    setIsAdding(false);
-                  }}
-                  disabled={isSaving}
-                >
-                  <Text style={styles.secondaryBtnText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.primaryBtn,
-                    isSaving && styles.primaryBtnDisabled,
-                  ]}
-                  onPress={handleSave}
-                  disabled={isSaving}
-                >
-                  {isSaving ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={styles.primaryBtnText}>Save</Text>
-                  )}
-                </TouchableOpacity>
               </View>
             </View>
 
@@ -874,13 +849,16 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
                 )}
               </View>
 
-              <FormField
-                label="BANK NAME"
-                placeholder="Enter bank name"
-                value={formData.bank_name}
-                onChangeText={t => handleChange('bank_name', t)}
-                isSmall={isSmall}
-              />
+              {/* 🔹 Bank name hidden when mode is Cash */}
+              {formData.mode !== 'Cash' && (
+                <FormField
+                  label="BANK NAME"
+                  placeholder="Enter bank name"
+                  value={formData.bank_name}
+                  onChangeText={t => handleChange('bank_name', t)}
+                  isSmall={isSmall}
+                />
+              )}
 
               <FormField
                 label="AMOUNT *"
@@ -891,22 +869,7 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
                 isSmall={isSmall}
               />
 
-              <View
-                style={[
-                  styles.fieldWrapper,
-                  isSmall && styles.fieldWrapperFull,
-                  styles.rowAlignCenter,
-                ]}
-              >
-                <Text style={styles.label}>IS DEPOSITED</Text>
-                <Switch
-                  style={{ marginLeft: 8 }}
-                  value={formData.is_deposited}
-                  onValueChange={v => handleChange('is_deposited', v)}
-                  trackColor={{ false: '#d1d5db', true: ACCENT }}
-                  thumbColor="#ffffff"
-                />
-              </View>
+              {/* 🔻 IS DEPOSITED removed from UI (kept only in logic/state) */}
 
               <View style={styles.fieldWrapperFull}>
                 <Text style={styles.label}>MODE</Text>
@@ -975,8 +938,8 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
                   <Feather name="camera" size={16} color={ACCENT} />
                   <Text style={styles.attachText}>
                     {formData.receipt_image_uri
-                      ? 'Change receipt photo'
-                      : 'Attach receipt photo'}
+                      ? 'Retake receipt photo'
+                      : 'Click receipt photo'}
                   </Text>
                 </TouchableOpacity>
 
@@ -986,6 +949,35 @@ const CollectionScreen: React.FC<CollectionScreenProps> = ({ fullName }) => {
                     style={styles.receiptPreview}
                   />
                 )}
+              </View>
+
+              {/* 🔻 Cancel & Save moved to bottom of form */}
+              <View style={styles.formFooterButtons}>
+                <TouchableOpacity
+                  style={styles.secondaryBtn}
+                  onPress={() => {
+                    clearForm();
+                    setIsAdding(false);
+                  }}
+                  disabled={isSaving}
+                >
+                  <Text style={styles.secondaryBtnText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.primaryBtn,
+                    isSaving && styles.primaryBtnDisabled,
+                  ]}
+                  onPress={handleSave}
+                  disabled={isSaving}
+                >
+                  {isSaving ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>Save</Text>
+                  )}
+                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -1467,6 +1459,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: ACCENT,
+  },
+
+  // 🔻 New: footer buttons at bottom of form
+  formFooterButtons: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginTop: 8,
   },
 
   loadingContainer: {

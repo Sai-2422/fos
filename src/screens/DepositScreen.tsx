@@ -17,8 +17,8 @@ import {
 import Feather from 'react-native-vector-icons/Feather';
 import {
   Asset,
-  ImageLibraryOptions,
-  launchImageLibrary,
+  CameraOptions,
+  launchCamera,
 } from 'react-native-image-picker';
 
 // ✅ Import your services
@@ -268,6 +268,29 @@ const DepositScreen: React.FC = () => {
     }
   };
 
+  // 📸 CLICK IMAGE (camera) instead of attach from gallery
+  const handlePickSlipImage = async () => {
+    const options: CameraOptions = {
+      mediaType: 'photo',
+      saveToPhotos: false,
+    };
+
+    const result = await launchCamera(options);
+    if (result.didCancel) return;
+
+    const asset: Asset | undefined = result.assets && result.assets[0];
+    if (asset?.uri) {
+      handleChange('deposit_slip_image_uri', asset.uri);
+      handleChange('deposit_slip_image_asset', asset);
+    }
+  };
+
+  const getTotalSelectedAmount = () => {
+    return undepositedCollections
+      .filter(col => selectedCollections.has(col.name))
+      .reduce((sum, col) => sum + col.amount, 0);
+  };
+
   const handleDelete = (name: string) => {
     Alert.alert(
       'Delete Deposit',
@@ -293,27 +316,6 @@ const DepositScreen: React.FC = () => {
         },
       ],
     );
-  };
-
-  const handlePickSlipImage = async () => {
-    const options: ImageLibraryOptions = {
-      mediaType: 'photo',
-      selectionLimit: 1,
-    };
-    const result = await launchImageLibrary(options);
-    if (result.didCancel) return;
-
-    const asset: Asset | undefined = result.assets && result.assets[0];
-    if (asset?.uri) {
-      handleChange('deposit_slip_image_uri', asset.uri);
-      handleChange('deposit_slip_image_asset', asset);
-    }
-  };
-
-  const getTotalSelectedAmount = () => {
-    return undepositedCollections
-      .filter(col => selectedCollections.has(col.name))
-      .reduce((sum, col) => sum + col.amount, 0);
   };
 
   return (
@@ -375,38 +377,11 @@ const DepositScreen: React.FC = () => {
           <View style={{ height: 16 }} />
 
           <View style={styles.card}>
+            {/* Header (title only) */}
             <View style={styles.headerRow}>
               <View>
                 <Text style={styles.title}>New FOS Cash Deposit</Text>
                 <Text style={styles.notSaved}>Not Saved</Text>
-              </View>
-
-              <View style={styles.headerButtons}>
-                <TouchableOpacity
-                  style={styles.secondaryBtn}
-                  onPress={() => {
-                    clearForm();
-                    setIsAdding(false);
-                  }}
-                  disabled={isSaving}
-                >
-                  <Text style={styles.secondaryBtnText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.primaryBtn,
-                    isSaving && styles.primaryBtnDisabled,
-                  ]}
-                  onPress={handleSave}
-                  disabled={isSaving}
-                >
-                  {isSaving ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={styles.primaryBtnText}>Save</Text>
-                  )}
-                </TouchableOpacity>
               </View>
             </View>
 
@@ -473,8 +448,8 @@ const DepositScreen: React.FC = () => {
                   <Feather name="camera" size={16} color={ACCENT} />
                   <Text style={styles.attachText}>
                     {formData.deposit_slip_image_uri
-                      ? 'Change slip photo'
-                      : 'Attach slip photo'}
+                      ? 'Retake slip photo'
+                      : 'Click slip photo'}
                   </Text>
                 </TouchableOpacity>
 
@@ -568,6 +543,35 @@ const DepositScreen: React.FC = () => {
                   </Text>
                 </View>
               )}
+            </View>
+
+            {/* 🔻 MOVED HERE: Cancel / Save at bottom of form */}
+            <View style={styles.formFooterButtons}>
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={() => {
+                  clearForm();
+                  setIsAdding(false);
+                }}
+                disabled={isSaving}
+              >
+                <Text style={styles.secondaryBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.primaryBtn,
+                  isSaving && styles.primaryBtnDisabled,
+                ]}
+                onPress={handleSave}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.primaryBtnText}>Save</Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         </>
@@ -802,33 +806,6 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   notSaved: { fontSize: 11, color: '#f97316', fontWeight: '600' },
-  headerButtons: { flexDirection: 'row', alignItems: 'center' },
-  secondaryBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    marginRight: 8,
-    backgroundColor: '#f9fafb',
-  },
-  secondaryBtnText: {
-    fontSize: 13,
-    color: '#4b5563',
-    fontWeight: '500',
-  },
-  primaryBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: ACCENT,
-    minWidth: 70,
-    alignItems: 'center',
-  },
-  primaryBtnDisabled: {
-    opacity: 0.6,
-  },
-  primaryBtnText: { fontSize: 13, color: '#ffffff', fontWeight: '600' },
 
   loadingContainer: {
     paddingVertical: 40,
@@ -1000,6 +977,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  // 🔻 New bottom button row for Cancel & Save
+  formFooterButtons: {
+    marginTop: 16,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+
   savedHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1109,6 +1094,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#fee2e2',
     borderRadius: 8,
   },
+
+  secondaryBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginRight: 8,
+    backgroundColor: '#f9fafb',
+  },
+  secondaryBtnText: {
+    fontSize: 13,
+    color: '#4b5563',
+    fontWeight: '500',
+  },
+  primaryBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: ACCENT,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  primaryBtnDisabled: {
+    opacity: 0.6,
+  },
+  primaryBtnText: { fontSize: 13, color: '#ffffff', fontWeight: '600' },
 });
 
 export default DepositScreen;

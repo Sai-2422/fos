@@ -468,6 +468,13 @@ const MyListScreen: React.FC = () => {
       typeof item.priority === 'string' ? item.priority.toLowerCase() : '';
     const typeOfVisit = resolveCaseType(item);
 
+    // 🔹 Pending amount – mapped from API-style fieldnames
+    const pendingAmount =
+      (item as any).pendingAmount ??
+      (item as any).pending_amount ??
+      (item as any).pending_amt ??
+      0;
+
     return (
       <TouchableOpacity
         style={styles.card}
@@ -514,7 +521,9 @@ const MyListScreen: React.FC = () => {
         </View>
 
         <View style={styles.metaRow}>
-          <Text style={styles.metaText}>Overdue: ₹ {item.overdueAmount}</Text>
+          <Text style={styles.metaText}>
+            Overdue: ₹ {item.overdueAmount} | Pending: ₹ {pendingAmount}
+          </Text>
           <Text style={styles.metaText}>DPD: {item.dpd}</Text>
         </View>
 
@@ -525,10 +534,11 @@ const MyListScreen: React.FC = () => {
         ) : null}
 
         <View style={styles.footerRow}>
-          <Text style={styles.metaText}>Agent: {item.agent || '-'}</Text>
           {item.outcomeType ? (
             <Text style={styles.metaText}>Outcome: {item.outcomeType}</Text>
-          ) : null}
+          ) : (
+            <Text style={styles.metaText}>Outcome: -</Text>
+          )}
         </View>
       </TouchableOpacity>
     );
