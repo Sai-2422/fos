@@ -1,3 +1,5 @@
+// android/build.gradle  (ROOT)
+
 buildscript {
     ext {
         buildToolsVersion = "36.0.0"
@@ -6,6 +8,12 @@ buildscript {
         targetSdkVersion = 36
         ndkVersion = "27.1.12297006"
         kotlinVersion = "2.1.20"
+
+        // ✅ Force a single Google Play Services LOCATION version
+        // This is used by react-native-geolocation-service and can also be read by other libs.
+        playServicesLocationVersion = "21.0.1"
+        // (Optional but safe) If react-native-maps reads this:
+        googlePlayServicesVersion = "21.0.1"
     }
     repositories {
         google()
